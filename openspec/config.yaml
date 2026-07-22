@@ -1,0 +1,47 @@
+schema: spec-driven
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+context: |
+  Tecnologías del Backend:
+    - Framework principal: NestJS
+    - ORM: Prisma ORM
+    - Base de datos: SQLite para desarrollo, preparada para migrar a PostgreSQL en producción.
+    - Integraciones de IA:
+        - Proveedor principal: Gemini API
+        - Proveedor secundario (Fallback): OpenRouter
+  Dominio del proyecto:
+    - Plataforma web EvalIA de asistencia inteligente para la corrección de exámenes manuscritos.
+    - Utiliza Inteligencia Artificial para generar sugerencias de calificación y observaciones por pregunta.
+    - El docente es siempre responsable de la evaluación final (la IA asiste, el profesor decide).
+  Modelo de datos principal:
+    - Profesor (id, googleId, nombre, email)
+    - Alumno (id, nombre, legajo)
+    - Examen (id, título, materia, curso, fecha)
+    - Pregunta (id, examenId, enunciado, respuestaEsperada, puntajeMáximo)
+    - Entrega (id, examenId, alumnoId, estado, fecha)
+    - Corrección (id, entregaId, notaIA, notaFinal, feedbackJSON, aprobadaPorProfesor, fechaAprobación)
+  Estados de una Entrega:
+    - PENDIENTE
+    - PROCESANDO
+    - REQUIERE_REVISION
+    - PENDIENTE_APROBACION
+    - PUBLICADO
+  Mecanismo de Fallback (Contingencia de IA):
+    - Reenrutamiento automático e invisible al usuario hacia OpenRouter si falla Gemini.
+    - Se activa ante cuota excedida (error 429), caída del servicio (errores 500/503) o timeout.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+rules:
+  proposal:
+    - Describir claramente el flujo de corrección y el rol asistivo de la IA.
+    - Asegurar que el mecanismo de fallback esté detallado.
+  design:
+    - Definir la estructura de control de estados de la Entrega.
+    - Especificar la estrategia para el manejo de fallas de la API de Gemini (mecanismo de fallback).
+    - Detallar el esquema de Prisma y las migraciones de base de datos de SQLite a PostgreSQL.
+  tasks:
+    - Dividir las tareas en pasos incrementales que se enfoquen primero en la base de datos (Prisma), luego en la integración de IA, y finalmente en los endpoints API REST.
+
