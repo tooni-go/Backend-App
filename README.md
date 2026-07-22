@@ -1,51 +1,59 @@
 # EvalIA
 
-> Plataforma web de **asistencia inteligente para la corrección de exámenes manuscritos**. EvalIA utiliza Inteligencia Artificial para generar una **sugerencia de calificación** y observaciones por pregunta, manteniendo siempre al docente como responsable de la evaluación final.
+> Aplicación web responsiva de asistencia inteligente para la corrección de exámenes escritos.
+
+EvalIA utiliza Inteligencia Artificial para analizar exámenes manuscritos, generar una sugerencia de corrección y brindar observaciones por pregunta. La IA actúa únicamente como asistente: **la decisión final siempre pertenece al docente**.
 
 ---
 
-## Índice
+# Índice
 
-- [Visión General](#visión-general)
-- [Problema](#problema)
-- [Objetivo](#objetivo)
-- [Público Objetivo](#público-objetivo)
-- [Alcance del MVP](#alcance-del-mvp)
-- [Fuera del Alcance](#fuera-del-alcance)
-- [Flujo de Trabajo](#flujo-de-trabajo)
-- [Arquitectura](#arquitectura)
-- [Tecnologías](#tecnologías)
-- [Modelo de Datos](#modelo-de-datos)
-- [Estados de una Entrega](#estados-de-una-entrega)
-- [Mecanismo de Fallback](#mecanismo-de-fallback)
-- [User Stories](#user-stories)
-- [Organización del Equipo](#organización-del-equipo)
-- [Roadmap](#roadmap)
+- Visión General
+- Problema
+- Objetivo
+- Público Objetivo
+- Alcance del MVP
+- Funcionalidades principales
+- Flujo de trabajo
+- Arquitectura
+- Tecnologías
+- Modelo de datos
+- Estados de una entrega
+- Mecanismo de Fallback
+- User Stories
+- Organización del equipo
+- Futuras mejoras
+- Propuesta de valor
 
 ---
 
 # Visión General
 
-EvalIA busca reducir el tiempo que los docentes dedican a corregir exámenes escritos en papel mediante una **asistencia basada en Inteligencia Artificial**.
+Los docentes dedican una gran cantidad de tiempo a corregir evaluaciones escritas en papel. Este proceso suele realizarse fuera del horario laboral y retrasa la devolución de resultados a los estudiantes.
 
-La IA analiza cada entrega, interpreta las respuestas, propone una calificación y genera observaciones por pregunta. Sin embargo, **la decisión final siempre pertenece al docente**, quien puede aceptar o modificar cualquier sugerencia antes de publicar la corrección.
+EvalIA busca reducir ese tiempo mediante un sistema de corrección asistido por Inteligencia Artificial que:
+
+- analiza fotografías o documentos PDF de exámenes;
+- interpreta las respuestas del alumno;
+- compara las respuestas con la solución esperada;
+- genera una sugerencia de puntaje;
+- produce observaciones por pregunta.
+
+El profesor conserva siempre el control de la evaluación, pudiendo modificar cualquier sugerencia antes de aprobar la corrección.
 
 ---
 
 # Problema
 
-Los docentes de nivel secundario dedican una gran cantidad de horas extra a corregir evaluaciones escritas manualmente, retrasando la devolución de resultados y aumentando su carga laboral.
+La corrección manual de exámenes representa una de las tareas más repetitivas y demandantes para los docentes.
+
+Además del tiempo invertido, la devolución de resultados suele demorarse varios días debido a la cantidad de exámenes que deben corregirse.
 
 ---
 
 # Objetivo
 
-Desarrollar una aplicación web de asistencia a la corrección de exámenes escritos que utilice Inteligencia Artificial para:
-
-- analizar las respuestas del alumno;
-- generar una **sugerencia** de calificación;
-- producir observaciones por pregunta;
-- permitir que el docente revise y apruebe la corrección final.
+Desarrollar una aplicación web responsiva que permita asistir al docente durante el proceso de corrección mediante Inteligencia Artificial, reduciendo el tiempo necesario para evaluar exámenes escritos sin reemplazar el criterio profesional del profesor.
 
 ---
 
@@ -53,7 +61,7 @@ Desarrollar una aplicación web de asistencia a la corrección de exámenes escr
 
 - Profesores de nivel secundario.
 
-> **Nota:** El portal para alumnos queda fuera del MVP y podrá incorporarse en futuras versiones.
+> El portal para alumnos queda fuera del MVP y podrá desarrollarse en futuras versiones.
 
 ---
 
@@ -61,97 +69,148 @@ Desarrollar una aplicación web de asistencia a la corrección de exámenes escr
 
 El profesor podrá:
 
-- Iniciar sesión mediante Google.
-- Crear exámenes.
-- Definir preguntas, respuestas esperadas y puntajes.
-- Registrar alumnos.
-- Subir entregas para corregir.
-- Obtener una sugerencia de corrección mediante IA.
-- Revisar la propuesta generada.
-- Modificar puntajes y observaciones.
-- Aprobar la corrección definitiva.
-
-## Formatos de entrega soportados
-
-Una entrega podrá realizarse mediante:
-
-- 📷 Fotografía tomada desde un dispositivo móvil.
-- 🖼️ Imagen (`JPG`, `JPEG`, `PNG`, `WEBP`).
-- 📄 Documento `PDF`.
-
-En dispositivos móviles, el navegador permitirá utilizar la cámara directamente mediante el selector de archivos.
+- iniciar sesión con Google;
+- crear exámenes;
+- utilizar una carga inteligente para generar preguntas automáticamente;
+- editar preguntas y respuestas esperadas;
+- agregar criterios adicionales de corrección;
+- registrar alumnos;
+- subir entregas;
+- corregir mediante IA;
+- revisar la sugerencia;
+- modificar la nota;
+- aprobar la corrección definitiva.
 
 ---
 
-# Fuera del Alcance
+# Funcionalidades principales
 
-Esta primera versión **no incluye**:
+## Autenticación
 
-- Corrección completamente automática.
-- Reemplazo de la decisión del docente.
-- Reconocimiento perfecto de cualquier tipo de letra.
-- Portal para alumnos.
-- Exámenes digitales.
-- Estadísticas avanzadas.
-- Exportación de informes en PDF.
-- Notificaciones.
-- Integraciones con plataformas educativas.
+- Google OAuth mediante Auth.js.
 
 ---
 
-# Flujo de Trabajo
+## Gestión de exámenes
+
+Cada examen podrá contener:
+
+- título;
+- materia;
+- curso;
+- preguntas;
+- respuestas esperadas;
+- puntajes;
+- criterios adicionales de corrección.
+
+---
+
+## Carga Inteligente
+
+Como alternativa al ingreso manual, el profesor podrá pegar el contenido completo del examen junto con las respuestas esperadas.
+
+La IA procesará ese texto y generará automáticamente:
+
+- preguntas;
+- respuestas esperadas;
+- puntajes sugeridos.
+
+Antes de guardar el examen, el profesor podrá revisar y modificar cualquier dato generado.
+
+---
+
+## Criterios adicionales de corrección
+
+Opcionalmente, el profesor podrá agregar instrucciones adicionales para orientar la evaluación de la IA.
+
+Ejemplos:
+
+- aceptar sinónimos;
+- no descontar errores ortográficos;
+- aceptar respuestas parciales;
+- permitir distintas formas de resolución.
+
+Estos criterios serán enviados junto con la consulta a la IA para obtener una corrección más cercana al criterio del docente.
+
+---
+
+## Carga de entregas
+
+Una entrega podrá cargarse mediante:
+
+- fotografías tomadas desde un dispositivo móvil;
+- imágenes JPG, JPEG, PNG o WEBP;
+- documentos PDF.
+
+El navegador permitirá abrir directamente la cámara del teléfono cuando el sistema se utilice desde un dispositivo móvil.
+
+---
+
+## Corrección asistida
+
+La IA analizará la entrega y devolverá:
+
+- texto detectado;
+- estado de legibilidad;
+- nivel de confianza;
+- puntaje sugerido;
+- observaciones por pregunta.
+
+---
+
+## Preguntas gráficas
+
+Si una pregunta requiere interpretar gráficos, esquemas, diagramas o trazados manuscritos complejos, la IA no asignará una nota automáticamente.
+
+La pregunta será marcada para revisión manual por parte del docente.
+
+---
+
+# Flujo de trabajo
 
 1. El profesor inicia sesión con Google.
-2. Crea un examen.
-3. Define las preguntas, respuestas esperadas y puntajes.
-4. Los alumnos realizan el examen en papel.
-5. El profesor crea una nueva entrega y carga imágenes o un PDF.
-6. El backend procesa el archivo y lo envía al proveedor de IA.
-7. El proveedor devuelve una respuesta estructurada en formato JSON con:
-   - texto detectado;
-   - estado de legibilidad;
-   - puntajes sugeridos;
-   - observaciones por pregunta.
-8. El backend valida el JSON recibido.
-9. Si la respuesta no es suficientemente confiable, la entrega queda marcada como **Requiere revisión**.
-10. El profesor revisa la propuesta.
-11. Puede modificar puntajes y observaciones.
-12. Aprueba la corrección definitiva.
+2. Crea un nuevo examen.
+3. Agrega preguntas manualmente o utiliza la Carga Inteligente.
+4. Revisa las preguntas generadas.
+5. Define criterios adicionales de corrección (opcional).
+6. Los alumnos realizan el examen en papel.
+7. El profesor crea una nueva entrega.
+8. Sube imágenes o un archivo PDF.
+9. El backend envía la información a la IA.
+10. La IA devuelve una propuesta de corrección.
+11. El backend valida la respuesta.
+12. Si la confianza es baja o existen preguntas gráficas, la entrega queda en revisión manual.
+13. El profesor revisa la propuesta.
+14. Modifica la nota si lo considera necesario.
+15. Aprueba la corrección.
 
 ---
 
 # Arquitectura
 
 ```text
-                   Profesor
-                       │
-                       │ Google OAuth
-                       ▼
-              ┌─────────────────┐
-              │    Frontend     │
-              │ Next.js + React │
-              └────────┬────────┘
-                       │
-                    REST API
-                       │
-                       ▼
-              ┌─────────────────┐
-              │     Backend     │
-              │     NestJS      │
-              └───────┬─────────┘
-                      │
-      ┌───────────────┼────────────────┐
-      │                                │
-      ▼                                ▼
-┌──────────────┐              ┌─────────────────┐
-│ Prisma ORM   │              │ Proveedor IA    │
-│ SQLite       │              │ Gemini          │
-└──────────────┘              └────────┬────────┘
-                                       │
-                              (Fallback automático)
-                                       │
-                                       ▼
-                                 OpenRouter
+                    Profesor
+                        │
+                        ▼
+      Navegador (PC / Tablet / Celular)
+                        │
+                        ▼
+              Frontend (Next.js)
+                        │
+                     REST API
+                        │
+                        ▼
+               Backend (NestJS)
+                        │
+         ┌──────────────┴──────────────┐
+         │                             │
+         ▼                             ▼
+ Prisma + SQLite                Gemini API
+                                        │
+                              Fallback automático
+                                        │
+                                        ▼
+                                  OpenRouter
 ```
 
 ---
@@ -163,35 +222,33 @@ Esta primera versión **no incluye**:
 - Next.js
 - React
 - Tailwind CSS
-- Auth.js (Google OAuth)
+- Auth.js
 
 ## Backend
 
 - NestJS
 - Prisma ORM
+
+## Base de datos
+
+- SQLite (desarrollo)
+- PostgreSQL (futuro)
+
+## Inteligencia Artificial
+
 - Gemini API
 - OpenRouter (Fallback)
 
-## Base de Datos
-
-Durante el desarrollo:
-
-- SQLite
-
-Arquitectura preparada para migrar posteriormente a:
-
-- PostgreSQL
-
 ---
 
-# Modelo de Datos
+# Modelo de datos
 
 ## Profesor
 
 - id
-- googleId
 - nombre
 - email
+- googleId
 
 ## Alumno
 
@@ -214,14 +271,16 @@ Arquitectura preparada para migrar posteriormente a:
 - enunciado
 - respuestaEsperada
 - puntajeMáximo
+- criteriosIA
+- esEvaluacionVisual
 
 ## Entrega
 
 - id
 - examenId
 - alumnoId
+- archivo
 - estado
-- fecha
 
 ## Corrección
 
@@ -229,57 +288,45 @@ Arquitectura preparada para migrar posteriormente a:
 - entregaId
 - notaIA
 - notaFinal
+- nivelConfianza
 - feedbackJSON
-- aprobadaPorProfesor
 - fechaAprobación
 
 ---
 
-# Estados de una Entrega
+# Estados de una entrega
 
 ```text
 PENDIENTE
-
+      │
+      ▼
 PROCESANDO
-
-REQUIERE_REVISION
-
+      │
+      ├──────────────► REQUIERE_REVISION
+      │
+      ▼
 PENDIENTE_APROBACION
-
+      │
+      ▼
 PUBLICADO
 ```
-Mecanismo de Fallback (Contingencia de IA en el Backend)
-Para garantizar la estabilidad del sistema y asegurar que el proceso de corrección no dependa exclusivamente de un solo proveedor, el backend implementará un mecanismo de contingencia (Fallback) de forma invisible para el usuario.
-
-Si la API principal falla, el sistema enrutará automáticamente la petición a un proveedor de IA secundario como OpenRouter.
-
-Condiciones para activar el Fallback:
-
-* Límite de Tokens o Cuota Excedida: Si la cuenta de Gemini se queda sin tokens disponibles o alcanza el límite de peticiones por minuto permitidas en su capa gratuita (Error 429 - Too Many Requests).
-
-* Caída del Servicio o Timeout: Si los servidores de Gemini experimentan una caída (Errores 500/503) o si la respuesta demora más del tiempo máximo establecido, dejando el proceso colgado.
 
 ---
 
 # Mecanismo de Fallback
 
-Para aumentar la disponibilidad del sistema, el backend implementará un mecanismo automático de contingencia.
+El backend utilizará Gemini como proveedor principal de Inteligencia Artificial.
 
-## Funcionamiento
+Si Gemini no puede responder correctamente debido a:
 
-1. El backend intenta procesar la solicitud utilizando **Gemini**.
-2. Si Gemini no responde correctamente, el sistema redirige automáticamente la petición hacia un proveedor secundario compatible (por ejemplo, **OpenRouter**).
-3. El usuario no percibe el cambio de proveedor.
+- límite de cuota;
+- timeout;
+- errores internos;
+- indisponibilidad del servicio;
 
-## El Fallback se activará cuando ocurra alguno de los siguientes casos
+la solicitud será reenviada automáticamente a OpenRouter.
 
-- Límite de cuota alcanzado.
-- Exceso de solicitudes (`429 Too Many Requests`).
-- Timeout.
-- Errores internos (`500`).
-- Servicio temporalmente no disponible (`503`).
-
-Este mecanismo evita que el proceso de corrección dependa exclusivamente de un único proveedor de Inteligencia Artificial.
+Este proceso será completamente transparente para el usuario.
 
 ---
 
@@ -287,24 +334,28 @@ Este mecanismo evita que el proceso de corrección dependa exclusivamente de un 
 
 ## Profesor
 
-- Como profesor quiero iniciar sesión con Google para acceder de forma segura.
-- Como profesor quiero crear un examen para definir los criterios de evaluación.
-- Como profesor quiero registrar alumnos para asociar las entregas.
-- Como profesor quiero subir imágenes o archivos PDF para iniciar la corrección.
-- Como profesor quiero obtener una sugerencia de corrección mediante IA.
-- Como profesor quiero editar puntajes y observaciones antes de publicar la corrección.
-- Como profesor quiero aprobar la nota definitiva.
+- Iniciar sesión con Google.
+- Crear un examen.
+- Utilizar la Carga Inteligente.
+- Editar preguntas y puntajes.
+- Agregar criterios adicionales de corrección.
+- Registrar alumnos.
+- Subir fotografías o PDF.
+- Obtener una sugerencia de corrección.
+- Revisar preguntas marcadas para validación manual.
+- Editar la nota.
+- Aprobar la corrección.
 
 ---
 
-# Organización del Equipo
+# Organización del equipo
 
 ## Frontend
 
 - Autenticación.
 - Dashboard.
 - Gestión de exámenes.
-- Formularios.
+- Gestión de alumnos.
 - Pantallas de corrección.
 
 ## Backend
@@ -312,86 +363,37 @@ Este mecanismo evita que el proceso de corrección dependa exclusivamente de un 
 - API REST.
 - Lógica de negocio.
 - Prisma.
-- Autenticación.
-- Gestión del mecanismo de Fallback.
+- Integración con IA.
+- Sistema de Fallback.
 
-## IA e Integración
+## Inteligencia Artificial
 
-- Comunicación con Gemini.
-- Comunicación con OpenRouter.
-- Procesamiento de imágenes.
+- Integración con Gemini.
+- Integración con OpenRouter.
 - Validación del JSON recibido.
-- Manejo de errores.
+- Procesamiento de imágenes.
+- Ingeniería de prompts.
 
 ---
 
-# Propuesta de Valor
+# Futuras mejoras
 
-La plataforma **no reemplaza al docente**.
-
-EvalIA reduce significativamente el tiempo dedicado a la corrección de evaluaciones mediante una primera propuesta generada por Inteligencia Artificial, dejando siempre la decisión final en manos del profesor.
-
-> **La IA asiste. El profesor siempre decide.**
-
----
-
-# Flujo General
-
-```text
-                 Crear examen
-                       │
-                       ▼
-      Agregar preguntas y respuestas
-                       │
-                       ▼
-      Los alumnos realizan el examen
-                       │
-                       ▼
-      Profesor crea una nueva entrega
-                       │
-                       ▼
-      Sube imágenes o un PDF
-                       │
-                       ▼
-      Backend procesa el archivo
-                       │
-                       ▼
-      Proveedor IA (Gemini)
-                       │
-         ┌─────────────┴─────────────┐
-         │                           │
-         ▼                           ▼
-      Correcto                  Error/Timeout
-         │                           │
-         │                    Fallback automático
-         │                           │
-         ▼                           ▼
-                    OpenRouter
-                           │
-                           ▼
-              Respuesta JSON estructurada
-                           │
-                           ▼
-               Backend valida respuesta
-                           │
-               ¿Resultado confiable?
-                  ┌────────┴────────┐
-                  │                 │
-                 NO                SÍ
-                  │                 │
-                  ▼                 ▼
-      Requiere revisión     Pendiente aprobación
-                  │                 │
-                  └────────┬────────┘
-                           ▼
-                Profesor revisa
-                Modifica si desea
-                           │
-                           ▼
-                Aprueba corrección
-                           │
-                           ▼
-                  Corrección publicada
-```
+- Aplicación móvil.
+- Portal para alumnos.
+- Estadísticas de rendimiento.
+- Exportación de informes.
+- Integración con plataformas educativas.
+- Soporte para múltiples modelos de IA.
 
 ---
+
+# Propuesta de valor
+
+EvalIA no busca reemplazar al docente.
+
+Su objetivo es reducir significativamente el tiempo dedicado a la corrección de exámenes escritos mediante una primera evaluación asistida por Inteligencia Artificial.
+
+La IA analiza, sugiere y explica.
+
+**El profesor siempre decide.**
+````
