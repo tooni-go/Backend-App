@@ -5,16 +5,16 @@ Actualmente, no existe el backend para la plataforma EvalIA. Es necesario establ
 ## What Changes
 
 - Creación del proyecto base en NestJS con su configuración y arquitectura inicial.
-- Definición e implementación del modelo de datos relacional usando Prisma y SQLite para desarrollo y PostgreSQL para producción.
+- Definición e implementación del modelo de datos relacional usando Prisma y SQLite para desarrollo y PostgreSQL para producción, incorporando la entidad Curso (con materia, año, división y año lectivo), vinculando el Profesor a sus Cursos, y los Cursos a sus Alumnos y Exámenes, además de los campos criteriosIA, esEvaluacionVisual, archivo y nivelConfianza.
 - Implementación de un servicio de IA unificado que utilice la API de Gemini como proveedor principal y un fallback automático invisible hacia OpenRouter en caso de errores (como límite de cuota 429, timeouts, o caídas de servidor 500/503).
-- Exposición de endpoints API REST para gestionar exámenes, registrar alumnos, procesar archivos de entregas y modificar/aprobar calificaciones finales.
+- Exposición de endpoints API REST para gestionar cursos, exámenes, registrar alumnos en cursos, procesar archivos de entregas y modificar/aprobar calificaciones finales.
 
 ## Capabilities
 
 ### New Capabilities
-- `db-schema`: Estructuración y migración del modelo de datos de EvalIA (Profesor, Alumno, Examen, Pregunta, Entrega, Corrección) usando Prisma ORM y SQLite/PostgreSQL.
-- `ai-fallback-engine`: Motor de integración de IA con Gemini API que reenvía solicitudes a OpenRouter automáticamente si Gemini falla o excede cuotas.
-- `submissions-api`: Endpoints REST y máquina de estados para subir archivos de entregas (imágenes y PDFs) y gestionar el flujo de corrección (PENDIENTE -> PROCESANDO -> REQUIERE_REVISION / PENDIENTE_APROBACION -> PUBLICADO) con intervención del profesor para validar la asistencia de la IA.
+- `db-schema`: Estructuración y migración del modelo de datos jerárquico de EvalIA (Profesor, Curso, Alumno, Examen, Pregunta, Entrega, Corrección) usando Prisma ORM y SQLite/PostgreSQL, vinculando correctamente las entidades conforme a los wireframes.
+- `ai-fallback-engine`: Motor de integración de IA con Gemini API y OpenRouter que retorna el texto detectado, sugerencias de puntaje, observaciones, y calcula el nivel de confianza de la corrección.
+- `submissions-api`: Endpoints REST y máquina de estados para gestionar la creación de cursos, asociación de alumnos y exámenes, subida de archivos de entregas (archivo) y control del flujo de corrección (PENDIENTE -> PROCESANDO -> REQUIERE_REVISION / PENDIENTE_APROBACION -> PUBLICADO).
 
 ### Modified Capabilities
 

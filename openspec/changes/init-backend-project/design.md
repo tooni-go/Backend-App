@@ -17,20 +17,25 @@ Se requiere inicializar el backend para EvalIA, una plataforma web de asistencia
 ## Decisions
 
 ### Decisión 1: Configuración de la Base de Datos y Prisma ORM
-Decidimos utilizar Prisma ORM con SQLite para el desarrollo local y PostgreSQL para producción.
-- **Razón**: SQLite permite un desarrollo local rápido sin necesidad de dockerizar bases de datos pesadas. Prisma permite cambiar fácilmente el motor a PostgreSQL cambiando solo el proveedor en `schema.prisma` y la cadena de conexión.
+Decidimos utilizar Prisma ORM con SQLite para el desarrollo local y PostgreSQL para producción, estructurando las relaciones de forma jerárquica:
+- **Profesor** -> Uno-a-Muchos -> **Curso** (Un profesor administra varios cursos).
+- **Curso** -> Uno-a-Muchos -> **Examen** (Un examen pertenece a un único curso; se eliminan los campos planos de materia y curso en Examen).
+- **Curso** -> Muchos-a-Muchos -> **Alumno** (Modelado implícito en Prisma, permitiendo que un alumno esté en múltiples cursos y un curso tenga múltiples alumnos).
+- **Examen** -> Uno-a-Muchos -> **Pregunta** y **Entrega**.
+- **Entrega** -> Uno-a-Muchos -> **Correccion**.
+- **Razón**: SQLite permite un desarrollo local rápido. La estructura jerárquica con la entidad `Curso` es indispensable para reflejar de forma exacta el Dashboard y el Detalle del Curso especificados en los wireframes.
 - **Alternativas consideradas**:
-  - *Usar PostgreSQL directamente en desarrollo*: Requiere más configuración de entorno local para los desarrolladores.
-  - *Usar TypeORM*: Prisma ofrece mejor autocompletado y una sintaxis más declarativa para esquemas.
+  - *Relación Plana (sin Curso)*: Se consideró inicialmente (del README.md original) pero se descartó porque impide la gestión de listas de alumnos por curso y agrupamiento de exámenes en el dashboard de forma dinámica.
+  - *Usar PostgreSQL directamente en desarrollo*: Requiere mayor configuración de entorno local.
 
 ### Decisión 2: Flujo y Máquina de Estados de la Entrega
 La entidad `Entrega` transita a través de los siguientes estados:
-- `PENDIENTE`: Creada, esperando procesamiento de archivo (imagen o PDF).
+- `PENDIENTE`: Creada, esperando procesamiento del archivo de entrega (`archivo` que contiene imagen o PDF).
 - `PROCESANDO`: Enviada al motor de IA para corrección.
-- `REQUIERE_REVISION`: Retornada de la IA pero marcada con baja confianza de legibilidad o datos incompletos. Requiere revisión manual forzosa.
-- `PENDIENTE_APROBACION`: IA devolvió una sugerencia estructurada confiable, esperando que el profesor revise y apruebe.
-- `PUBLICADO`: Calificación final y observaciones aprobadas por el docente y publicadas.
-- **Razón**: Esta granularidad de estados permite una UI reactiva donde el profesor sabe exactamente qué entregas requieren atención inmediata.
+- `REQUIERE_REVISION`: Se activa automáticamente si el nivel de confianza (`nivelConfianza`) devuelto por la IA es bajo, o si alguna pregunta del examen requiere evaluación visual/gráfica (`esEvaluacionVisual = true`), requiriendo validación y corrección manual por parte del docente.
+- `PENDIENTE_APROBACION`: IA devolvió una sugerencia estructurada con nivel de confianza medio o alto, esperando que el profesor revise y apruebe.
+- `PUBLICADO`: Calificación final y observaciones guardadas y aprobadas por el docente.
+- **Razón**: Esto permite que el profesor intervenga específicamente en las entregas complejas o dudosas, optimizando su tiempo y manteniendo el control pedagógico.
 
 ### Decisión 3: Arquitectura del Mecanismo de Fallback de IA
 El motor de IA se abstraerá bajo un servicio unificado en NestJS (ej. `AiEvaluationService`).

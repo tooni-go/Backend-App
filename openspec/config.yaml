@@ -16,16 +16,17 @@ context: |
     - Utiliza Inteligencia Artificial para generar sugerencias de calificación y observaciones por pregunta.
     - El docente es siempre responsable de la evaluación final (la IA asiste, el profesor decide).
   Modelo de datos principal:
-    - Profesor (id, googleId, nombre, email)
-    - Alumno (id, nombre, legajo)
-    - Examen (id, título, materia, curso, fecha)
-    - Pregunta (id, examenId, enunciado, respuestaEsperada, puntajeMáximo)
-    - Entrega (id, examenId, alumnoId, estado, fecha)
-    - Corrección (id, entregaId, notaIA, notaFinal, feedbackJSON, aprobadaPorProfesor, fechaAprobación)
+    - Profesor (id, nombre, email, googleId)
+    - Curso (id, materia, anio, division, anioLectivo, profesorId)
+    - Alumno (id, nombre, legajo) [Muchos a muchos con Curso o asignados mediante join table]
+    - Examen (id, título, fecha, cursoId)
+    - Pregunta (id, examenId, enunciado, respuestaEsperada, puntajeMáximo, criteriosIA, esEvaluacionVisual)
+    - Entrega (id, examenId, alumnoId, archivo, estado)
+    - Corrección (id, entregaId, notaIA, notaFinal, nivelConfianza, feedbackJSON, fechaAprobación)
   Estados de una Entrega:
     - PENDIENTE
     - PROCESANDO
-    - REQUIERE_REVISION
+    - REQUIERE_REVISION (Se activa si hay baja confianza de la IA o si el examen contiene preguntas visuales/gráficas)
     - PENDIENTE_APROBACION
     - PUBLICADO
   Mecanismo de Fallback (Contingencia de IA):

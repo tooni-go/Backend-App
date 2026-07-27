@@ -14,13 +14,21 @@ The system SHALL intercept failures from Gemini API and route the grading reques
 - **WHEN** Gemini API returns error 429, 500, 503, or times out (exceeds 15 seconds)
 - **THEN** the request is automatically retried using OpenRouter client without exposing the error to the user.
 
-### Requirement: JSON Response Validation
-The system MUST validate the JSON output received from either AI provider to ensure it contains: text detected, legibility flag, suggested scores, and observations per question.
+### Requirement: JSON Response Validation and State Transition
+The system MUST validate the JSON output received from either AI provider and evaluate the confidence level and exam attributes to set the appropriate `Entrega` state.
 
-#### Scenario: Schema validation success
-- **WHEN** the AI response JSON matches the required grading schema and legibility is true
+#### Scenario: Schema validation success and high confidence
+- **WHEN** the AI response JSON matches the required grading schema, the confidence level is high or medium, and there are no visual questions (`esEvaluacionVisual = false`)
 - **THEN** the submission status is set to PENDIENTE_APROBACION.
 
-#### Scenario: Schema validation failure or illegible
-- **WHEN** the AI response JSON is invalid or legibility is marked false
+#### Scenario: Low confidence returned by AI
+- **WHEN** the AI response JSON is valid but the confidence level returned is low
+- **THEN** the submission status is set to REQUIERE_REVISION.
+
+#### Scenario: Exam contains visual questions
+- **WHEN** the exam contains visual questions (`esEvaluacionVisual = true`)
+- **THEN** the submission status is set to REQUIERE_REVISION (forcing teacher validation).
+
+#### Scenario: Schema validation failure
+- **WHEN** the AI response is not valid JSON or does not match the expected structure
 - **THEN** the submission status is set to REQUIERE_REVISION.
