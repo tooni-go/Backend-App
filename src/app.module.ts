@@ -5,9 +5,10 @@ import { AiModule } from './ai/ai.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { CursosModule } from './cursos/cursos.module';
 import { EntregasModule } from './entregas/entregas.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [AiModule, PrismaModule, CursosModule, EntregasModule],
+  imports: [AiModule, PrismaModule, CursosModule, EntregasModule, AuthModule],
   controllers: [AppController],
   providers: [AppService],
 })
