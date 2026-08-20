@@ -275,7 +275,7 @@ export class AiService {
       const parseMessage =
         parseError instanceof Error ? parseError.message : String(parseError);
       this.logger.error(
-        `Error al parsear el JSON del examen generado: ${parseMessage}`,
+        `Error al parsear el JSON del examen generado: ${parseMessage}. Respuesta recibida:\n${responseText}`,
       );
       throw new InternalServerErrorException(
         'Error al interpretar la estructura del examen generado por la IA.',
@@ -385,7 +385,8 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    const modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+    const modelName =
+      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
 
     const filePart = {
       inlineData: {
@@ -436,7 +437,8 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     }
 
     const ai = new GoogleGenAI({ apiKey });
-    const modelName = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+    const modelName =
+      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
 
     const contents: Array<
       string | { inlineData: { data: string; mimeType: string } }
@@ -491,7 +493,8 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
     }
 
-    const modelName = process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+    const modelName =
+      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
     this.logger.log(`Llamando a OpenRouter usando el modelo: ${modelName}...`);
 
     const response = await fetch(
@@ -558,7 +561,8 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
     }
 
-    const modelName = process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+    const modelName =
+      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
     this.logger.log(
       `Llamando a OpenRouter para generación de examen usando el modelo: ${modelName}...`,
     );

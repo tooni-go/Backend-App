@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AiService } from '../ai/ai.service';
+import { AiService, SUPPORTED_SUBMISSION_MIME_TYPES } from '../ai/ai.service';
 import { join } from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'crypto';
@@ -15,6 +20,19 @@ export class EntregasService {
   ) {}
 
   /**
+   * Obtiene la ruta absoluta del directorio de uploads, compatible tanto en desarrollo como en producción.
+   */
+  private getUploadsDir(): string {
+    const customUploadsDir = process.env.UPLOADS_DIR;
+    if (customUploadsDir) {
+      return customUploadsDir.startsWith('/')
+        ? customUploadsDir
+        : join(process.cwd(), customUploadsDir);
+    }
+    return join(process.cwd(), 'uploads');
+  }
+
+  /**
    * Crea una entrega, guarda el archivo cargado de forma local y gatilla la corrección de IA asíncrona.
    */
   async createEntrega(
@@ -22,7 +40,36 @@ export class EntregasService {
     alumnoId: string,
     file: Express.Multer.File,
   ) {
-    // Verificar que existen el Examen y el Alumno
+    // 1. Validaciones previas de entrada y archivo
+    if (!examId) {
+      throw new BadRequestException('Debe especificar el ID del examen (examId).');
+    }
+
+    if (!alumnoId) {
+      throw new BadRequestException('Debe especificar el ID del alumno (alumnoId).');
+    }
+
+    if (!file || !file.buffer) {
+      throw new BadRequestException('Debe proporcionar un archivo para la entrega.');
+    }
+
+    // 2. Validación de tipo MIME soportado
+    if (!SUPPORTED_SUBMISSION_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(
+        `Tipo de archivo '${file.mimetype}' no soportado. Formatos permitidos: JPG, PNG, WEBP, PDF.`,
+      );
+    }
+
+    // 3. Validación de tamaño máximo permitido
+    const maxUploadSizeMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
+    const maxUploadSizeBytes = maxUploadSizeMb * 1024 * 1024;
+    if (file.size && file.size > maxUploadSizeBytes) {
+      throw new BadRequestException(
+        `El archivo excede el tamaño máximo permitido de ${maxUploadSizeMb}MB.`,
+      );
+    }
+
+    // 4. Verificar que existen el Examen y el Alumno
     const examen = await this.prisma.examen.findUnique({
       where: { id: examId },
     });
@@ -37,10 +84,10 @@ export class EntregasService {
       throw new NotFoundException(`Alumno con ID ${alumnoId} no encontrado.`);
     }
 
-    // Generar un nombre único para el archivo y guardarlo
-    const extension = file.originalname.split('.').pop();
+    // 5. Generar un nombre único para el archivo y guardarlo en el path resuelto
+    const extension = file.originalname ? file.originalname.split('.').pop() : 'bin';
     const uniqueFilename = `${Date.now()}-${randomUUID()}.${extension}`;
-    const uploadsDir = join(__dirname, '..', '..', 'uploads');
+    const uploadsDir = this.getUploadsDir();
 
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
@@ -51,7 +98,7 @@ export class EntregasService {
 
     const relativePath = `uploads/${uniqueFilename}`;
 
-    // Crear la entrega en estado PENDIENTE
+    // 6. Crear la entrega en estado PENDIENTE
     const entrega = await this.prisma.entrega.create({
       data: {
         examenId: examId,
@@ -61,7 +108,7 @@ export class EntregasService {
       },
     });
 
-    // Iniciar procesamiento asíncrono en background (sin esperar el await)
+    // 7. Iniciar procesamiento asíncrono en background (sin esperar el await)
     this.processCorrectionBackground(
       entrega.id,
       file.buffer,
@@ -72,6 +119,34 @@ export class EntregasService {
     });
 
     return entrega;
+  }
+
+  /**
+   * Lista entregas con filtros opcionales por examenId y/o alumnoId.
+   */
+  async getEntregas(filters: { examenId?: string; alumnoId?: string }) {
+    const { examenId, alumnoId } = filters;
+
+    if (!examenId && !alumnoId) {
+      throw new BadRequestException(
+        'Debe especificar al menos un filtro: examenId o alumnoId.',
+      );
+    }
+
+    const where: { examenId?: string; alumnoId?: string } = {};
+    if (examenId) where.examenId = examenId;
+    if (alumnoId) where.alumnoId = alumnoId;
+
+    return this.prisma.entrega.findMany({
+      where,
+      include: {
+        alumno: true,
+        examen: {
+          include: { preguntas: true },
+        },
+        correccion: true,
+      },
+    });
   }
 
   /**
