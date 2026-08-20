@@ -98,6 +98,34 @@ Este archivo sirve como especificación técnica del backend de **EvalIA** para 
   ```
 - **Response (JSON):** Retorna el examen creado junto a sus preguntas.
 
+#### **Carga Inteligente de Examen (Generación con IA)**
+- **Método & Ruta:** `POST /api/v1/examenes/generar`
+- **Formatos Aceptados:**
+  - `application/json`: `{ "texto": "Consignas o temario del examen..." }`
+  - `multipart/form-data`:
+    - `file` (File/Blob, opcional): Archivo PDF, imagen (JPG, PNG, WEBP) o TXT con el temario o examen escaneado.
+    - `texto` (string, opcional): Consignas o requerimientos adicionales del docente.
+- **Response (JSON):**
+  ```json
+  {
+    "titulo": "Evaluación de Álgebra y Geometría Analítica",
+    "preguntas": [
+      {
+        "enunciado": "Defina qué es una función lineal y explique el significado de la pendiente.",
+        "respuestaEsperada": "Una función de la forma f(x) = mx + b. La pendiente m representa la razón de cambio o inclinación de la recta.",
+        "puntajeMaximo": 5,
+        "esEvaluacionVisual": false
+      },
+      {
+        "enunciado": "Grafique en un sistema de coordenadas la recta y = 2x - 1.",
+        "respuestaEsperada": "Gráfico con recta que corta al eje Y en (0, -1) y al eje X en (0.5, 0) con pendiente positiva 2.",
+        "puntajeMaximo": 5,
+        "esEvaluacionVisual": true
+      }
+    ]
+  }
+  ```
+
 ---
 
 ### 3. Entregas y Correcciones

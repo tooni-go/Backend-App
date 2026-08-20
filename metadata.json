@@ -1,0 +1,8 @@
+{
+  "name": "EvalIA Backend",
+  "description": "Backend service for EvalIA - Automated exam evaluation and correction platform with AI",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

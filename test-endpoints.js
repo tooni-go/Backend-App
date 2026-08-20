@@ -49,36 +49,68 @@ async function runTests() {
     const alumno = await alumnoRes.json();
     console.log('✅ Alumno registrado con éxito:', alumno);
 
-    // 4. Crear un Examen para el Curso
-    console.log(`\n4. Creando un examen para el curso ${curso.id} (POST /api/v1/cursos/:id/examenes)...`);
+    // 4. Carga Inteligente de Examen con IA (POST /api/v1/examenes/generar)
+    console.log('\n4. Probando Carga Inteligente de Exámenes con IA (POST /api/v1/examenes/generar)...');
+    
+    // 4a. Generación a partir de texto en JSON
+    console.log('   4a. Generando examen a partir de consignas en JSON...');
+    const generarJsonRes = await fetch(`${BACKEND_URL}/api/v1/examenes/generar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        texto: 'Crear una evaluación de Álgebra y Funciones: 1 pregunta sobre funciones lineales y 1 pregunta pidiendo graficar una función cuadrática.',
+      }),
+    });
+    if (!generarJsonRes.ok) throw new Error(`Error en Carga Inteligente (JSON): ${await generarJsonRes.text()}`);
+    const examenGeneradoJson = await generarJsonRes.json();
+    console.log('   ✅ Examen generado desde JSON:', examenGeneradoJson.titulo);
+    console.log(`      Preguntas generadas: ${examenGeneradoJson.preguntas.length}`);
+
+    // 4b. Generación a partir de archivo multipart/form-data
+    console.log('   4b. Generando examen a partir de archivo TXT multipart/form-data...');
+    const temarioContent = 'Temario: Cinemática y Movimiento Rectilíneo Uniforme (MRU)\n1. Defina velocidad media.\n2. Problema de encuentro de dos móviles.';
+    const temarioBlob = new Blob([temarioContent], { type: 'text/plain' });
+    const formDataGenerar = new FormData();
+    formDataGenerar.append('file', temarioBlob, 'temario.txt');
+    formDataGenerar.append('texto', 'Generar 2 preguntas con respuestas modelo.');
+
+    const generarFileRes = await fetch(`${BACKEND_URL}/api/v1/examenes/generar`, {
+      method: 'POST',
+      body: formDataGenerar,
+    });
+    if (!generarFileRes.ok) throw new Error(`Error en Carga Inteligente (Multipart): ${await generarFileRes.text()}`);
+    const examenGeneradoFile = await generarFileRes.json();
+    console.log('   ✅ Examen generado desde archivo:', examenGeneradoFile.titulo);
+
+    // 4c. Validación de rechazo ante entrada vacía (Error 400)
+    console.log('   4c. Verificando validación 400 ante payload vacío...');
+    const generarVacioRes = await fetch(`${BACKEND_URL}/api/v1/examenes/generar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (generarVacioRes.status === 400) {
+      console.log('   ✅ Error 400 retornado correctamente ante solicitud sin texto ni archivo.');
+    } else {
+      throw new Error(`Se esperaba status 400 pero se recibió ${generarVacioRes.status}`);
+    }
+
+    // 5. Guardar el Examen Generado por IA en el Curso
+    console.log(`\n5. Guardando el examen generado en el curso ${curso.id} (POST /api/v1/cursos/:id/examenes)...`);
     const examenRes = await fetch(`${BACKEND_URL}/api/v1/cursos/${curso.id}/examenes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        titulo: 'Examen de Álgebra',
-        preguntas: [
-          {
-            enunciado: '¿Cuánto es 2 + 2?',
-            respuestaEsperada: '4',
-            puntajeMaximo: 5,
-            criteriosIA: 'Aceptar resolución paso a paso',
-            esEvaluacionVisual: false,
-          },
-          {
-            enunciado: 'Dibuje una función lineal creciente.',
-            respuestaEsperada: 'Un gráfico con una recta de pendiente positiva',
-            puntajeMaximo: 5,
-            esEvaluacionVisual: true, // Esto forzará estado REQUIERE_REVISION por ser pregunta visual
-          },
-        ],
+        titulo: examenGeneradoJson.titulo,
+        preguntas: examenGeneradoJson.preguntas,
       }),
     });
     if (!examenRes.ok) throw new Error(`Error creando examen: ${await examenRes.text()}`);
     const examen = await examenRes.json();
-    console.log('✅ Examen creado con éxito:', examen);
+    console.log('✅ Examen guardado con éxito en la base de datos:', examen.id, `(Preguntas: ${examen.preguntas.length})`);
 
-    // 5. Crear una Entrega (Subida de archivo)
-    console.log('\n5. Creando una entrega con un archivo ficticio (POST /api/v1/entregas)...');
+    // 6. Crear una Entrega (Subida de archivo)
+    console.log('\n6. Creando una entrega con un archivo ficticio (POST /api/v1/entregas)...');
     
     // Creamos un archivo dummy en memoria
     const fileContent = 'Contenido del examen de prueba';
@@ -96,8 +128,8 @@ async function runTests() {
     let entrega = await entregaRes.json();
     console.log('✅ Entrega subida con éxito (en estado PENDIENTE):', entrega);
 
-    // 6. Consultar la entrega (esperando el procesamiento asíncrono en background)
-    console.log('\n6. Consultando el estado de la entrega en background (GET /api/v1/entregas/:id)...');
+    // 7. Consultar la entrega (esperando el procesamiento asíncrono en background)
+    console.log('\n7. Consultando el estado de la entrega en background (GET /api/v1/entregas/:id)...');
     console.log('Esperando 3 segundos a que actúe la IA (Gemini/OpenRouter)...');
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
@@ -107,8 +139,8 @@ async function runTests() {
     console.log('✅ Estado actual de la entrega:', entrega.estado);
     console.log('   Sugerencias de Corrección:', entrega.correccion ? entrega.correccion : 'No procesada aún por la IA');
 
-    // 7. Aprobar la entrega por parte del profesor
-    console.log(`\n7. Aprobando la entrega ${entrega.id} (PUT /api/v1/entregas/:id/aprobar)...`);
+    // 8. Aprobar la entrega por parte del profesor
+    console.log(`\n8. Aprobando la entrega ${entrega.id} (PUT /api/v1/entregas/:id/aprobar)...`);
     const aprobarRes = await fetch(`${BACKEND_URL}/api/v1/entregas/${entrega.id}/aprobar`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

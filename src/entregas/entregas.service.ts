@@ -41,7 +41,7 @@ export class EntregasService {
     const extension = file.originalname.split('.').pop();
     const uniqueFilename = `${Date.now()}-${randomUUID()}.${extension}`;
     const uploadsDir = join(__dirname, '..', '..', 'uploads');
-    
+
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
@@ -62,9 +62,14 @@ export class EntregasService {
     });
 
     // Iniciar procesamiento asíncrono en background (sin esperar el await)
-    this.processCorrectionBackground(entrega.id, file.buffer, file.mimetype).catch(
-      (err) => this.logger.error(`Error en proceso de corrección background: ${err.message}`),
-    );
+    this.processCorrectionBackground(
+      entrega.id,
+      file.buffer,
+      file.mimetype,
+    ).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error en proceso de corrección background: ${msg}`);
+    });
 
     return entrega;
   }
@@ -78,7 +83,9 @@ export class EntregasService {
     mimeType: string,
   ) {
     try {
-      this.logger.log(`[Background] Iniciando corrección para Entrega ID: ${entregaId}`);
+      this.logger.log(
+        `[Background] Iniciando corrección para Entrega ID: ${entregaId}`,
+      );
 
       // 1. Actualizar estado a PROCESANDO
       await this.prisma.entrega.update({
@@ -111,11 +118,12 @@ export class EntregasService {
       }));
 
       // 3. Evaluar con el servicio de IA
-      const { evaluation, finalState } = await this.aiService.evaluateSubmission(
-        fileBuffer,
-        mimeType,
-        questionsData,
-      );
+      const { evaluation, finalState } =
+        await this.aiService.evaluateSubmission(
+          fileBuffer,
+          mimeType,
+          questionsData,
+        );
 
       // 4. Guardar los resultados en la tabla Corrección si la evaluación tuvo éxito
       if (evaluation) {
@@ -141,15 +149,25 @@ export class EntregasService {
         data: { estado: finalState },
       });
 
-      this.logger.log(`[Background] Corrección finalizada para Entrega ID: ${entregaId}. Estado: ${finalState}`);
-    } catch (err) {
-      this.logger.error(`[Background] Error procesando Entrega ID: ${entregaId}: ${err.message || err}`);
-      
+      this.logger.log(
+        `[Background] Corrección finalizada para Entrega ID: ${entregaId}. Estado: ${finalState}`,
+      );
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `[Background] Error procesando Entrega ID: ${entregaId}: ${errorMsg}`,
+      );
+
       // En caso de fallo catastrófico, forzar a REQUIERE_REVISION para que el docente pueda ver la entrega.
-      await this.prisma.entrega.update({
-        where: { id: entregaId },
-        data: { estado: 'REQUIERE_REVISION' },
-      }).catch((e) => this.logger.error(`No se pudo setear REQUIERE_REVISION: ${e.message}`));
+      await this.prisma.entrega
+        .update({
+          where: { id: entregaId },
+          data: { estado: 'REQUIERE_REVISION' },
+        })
+        .catch((e: unknown) => {
+          const eMsg = e instanceof Error ? e.message : String(e);
+          this.logger.error(`No se pudo setear REQUIERE_REVISION: ${eMsg}`);
+        });
     }
   }
 
@@ -192,9 +210,11 @@ export class EntregasService {
 
     // Actualizar o crear registro de corrección con los valores definidos por el docente
     if (entrega.correccion) {
-      const feedbackObj = entrega.correccion.feedbackJSON
-        ? JSON.parse(entrega.correccion.feedbackJSON)
-        : {};
+      const feedbackObj = (
+        entrega.correccion.feedbackJSON
+          ? JSON.parse(entrega.correccion.feedbackJSON)
+          : {}
+      ) as Record<string, unknown>;
       feedbackObj.observacionesDocente = observaciones || '';
 
       await this.prisma.correccion.update({
