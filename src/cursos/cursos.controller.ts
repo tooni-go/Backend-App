@@ -24,19 +24,17 @@ export class CursosController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['materia', 'anio', 'division', 'anioLectivo'],
+      required: ['nombre', 'materia'],
       properties: {
+        nombre: { type: 'string', example: 'Matemática 5° A' },
         materia: { type: 'string', example: 'Matemática' },
-        anio: { type: 'integer', example: 5 },
-        division: { type: 'string', example: 'A' },
-        anioLectivo: { type: 'integer', example: 2026 },
       },
     },
   })
   @ApiResponse({ status: 201, description: 'Curso creado exitosamente.' })
   @ApiResponse({ status: 401, description: 'No autorizado (token JWT faltante o expirado).' })
   async createCurso(
-    @Body() body: { materia: string; anio: number; division: string; anioLectivo: number },
+    @Body() body: { nombre: string; materia: string },
     @Req() req: any,
   ) {
     return this.cursosService.createCurso(body, req.user.id);
