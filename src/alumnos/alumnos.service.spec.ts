@@ -11,20 +11,20 @@ describe('AlumnosService', () => {
     alumno: {
       count: jest.fn().mockResolvedValue(1),
       findMany: jest.fn().mockResolvedValue([
-        { id: '1', nombre: 'Juan', apellido: 'Perez', legajo: 'L-101' },
+        { id: '1', nombre: 'Juan', apellido: 'Perez', legajo: '38123456' },
       ]),
       findUnique: jest.fn(),
       create: jest.fn().mockResolvedValue({
         id: '1',
         nombre: 'Juan',
         apellido: 'Perez',
-        legajo: 'L-101',
+        legajo: '38123456',
       }),
       update: jest.fn().mockResolvedValue({
         id: '1',
         nombre: 'Juan',
         apellido: 'Perez',
-        legajo: 'L-102',
+        legajo: '38123457',
       }),
       delete: jest.fn().mockResolvedValue({ id: '1' }),
     },
@@ -55,7 +55,7 @@ describe('AlumnosService', () => {
   describe('getAlumnos', () => {
     it('should return paginated list', async () => {
       const res = await service.getAlumnos('curso-1', 1, 10);
-      expect(res.data).toEqual([{ id: '1', nombre: 'Juan Perez', legajo: 'L-101' }]);
+      expect(res.data).toEqual([{ id: '1', nombre: 'Juan Perez', legajo: '38123456' }]);
       expect(res.meta).toEqual({ total: 1, page: 1, limit: 10, totalPages: 1 });
     });
   });
@@ -66,10 +66,10 @@ describe('AlumnosService', () => {
         id: '1',
         nombre: 'Juan',
         apellido: 'Perez',
-        legajo: 'L-101',
+        legajo: '38123456',
       });
       const res = await service.getAlumno('1');
-      expect(res).toEqual({ id: '1', nombre: 'Juan Perez', legajo: 'L-101' });
+      expect(res).toEqual({ id: '1', nombre: 'Juan Perez', legajo: '38123456' });
     });
 
     it('should throw NotFoundException if not found', async () => {
@@ -83,7 +83,7 @@ describe('AlumnosService', () => {
       mockPrismaService.alumno.findUnique.mockResolvedValueOnce(null);
       const res = await service.createAlumno({
         nombre: 'Juan Perez',
-        legajo: 'L-101',
+        legajo: '38123456',
         cursoId: 'curso-1',
       });
       expect(res.nombre).toBe('Juan Perez');

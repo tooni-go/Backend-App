@@ -4,9 +4,19 @@ import { AppModule } from './app.module';
 import { join } from 'path';
 import * as fs from 'fs';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Validaciones globales usando class-validator
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
 
   // Crear la carpeta uploads si no existe
   const uploadsDir = join(__dirname, '..', 'uploads');

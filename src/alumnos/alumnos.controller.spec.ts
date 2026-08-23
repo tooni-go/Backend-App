@@ -8,23 +8,23 @@ describe('AlumnosController', () => {
 
   const mockAlumnosService = {
     getAlumnos: jest.fn().mockResolvedValue({
-      data: [{ id: '1', nombre: 'Juan Perez', legajo: 'L-101' }],
+      data: [{ id: '1', nombre: 'Juan Perez', legajo: '38123456' }],
       meta: { total: 1, page: 1, limit: 10, totalPages: 1 },
     }),
     getAlumno: jest.fn().mockResolvedValue({
       id: '1',
       nombre: 'Juan Perez',
-      legajo: 'L-101',
+      legajo: '38123456',
     }),
     createAlumno: jest.fn().mockResolvedValue({
       id: '1',
       nombre: 'Juan Perez',
-      legajo: 'L-101',
+      legajo: '38123456',
     }),
     updateAlumno: jest.fn().mockResolvedValue({
       id: '1',
       nombre: 'Juan Modificado',
-      legajo: 'L-101',
+      legajo: '38123456',
     }),
     deleteAlumno: jest.fn().mockResolvedValue({ success: true }),
   };
@@ -61,7 +61,7 @@ describe('AlumnosController', () => {
   });
 
   it('should create an alumno', async () => {
-    const dto = { nombre: 'Juan Perez', legajo: 'L-101', cursoId: 'curso-1' };
+    const dto = { nombre: 'Juan Perez', legajo: '38123456', cursoId: 'curso-1' };
     const res = await controller.createAlumno(dto);
     expect(service.createAlumno).toHaveBeenCalledWith(dto);
     expect(res.nombre).toBe('Juan Perez');
