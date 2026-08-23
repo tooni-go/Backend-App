@@ -90,6 +90,9 @@ export class CursosService {
       where: { profesorId },
       include: {
         examenes: true,
+        _count: {
+          select: { alumnos: true },
+        },
       },
     });
     
@@ -98,6 +101,7 @@ export class CursosService {
       nombre: `${c.materia} ${c.anio}° ${c.division}`, // Or just some constructed string, openspec says nombre
       materia: c.materia,
       fechaCreacion: new Date().toISOString(), // Mocking as it's not in db
+      alumnosCount: c._count.alumnos,
       examenes: c.examenes.map(e => ({
         id: e.id,
         titulo: e.titulo,
