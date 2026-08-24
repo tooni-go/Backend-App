@@ -7,9 +7,18 @@ import { CursosModule } from './cursos/cursos.module';
 import { EntregasModule } from './entregas/entregas.module';
 import { AuthModule } from './auth/auth.module';
 import { AlumnosModule } from './alumnos/alumnos.module';
+import { ExamenesModule } from './examenes/examenes.module';
 
 @Module({
-  imports: [AiModule, PrismaModule, CursosModule, EntregasModule, AuthModule, AlumnosModule],
+  imports: [
+    AiModule,
+    PrismaModule,
+    CursosModule,
+    EntregasModule,
+    AuthModule,
+    AlumnosModule,
+    ExamenesModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

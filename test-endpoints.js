@@ -49,55 +49,154 @@ async function runTests() {
     const alumno = await alumnoRes.json();
     console.log('✅ Alumno registrado con éxito:', alumno);
 
-    // 4. Crear un Examen para el Curso
-    console.log(`\n4. Creando un examen para el curso ${curso.id} (POST /api/v1/cursos/:id/examenes)...`);
+    // 4. Carga Inteligente de Examen con IA (POST /api/v1/examenes/generar)
+    console.log('\n4. Probando Carga Inteligente de Exámenes con IA (POST /api/v1/examenes/generar)...');
+    
+    // 4a. Generación a partir de texto en JSON
+    console.log('   4a. Generando examen a partir de consignas en JSON...');
+    const generarJsonRes = await fetch(`${BACKEND_URL}/api/v1/examenes/generar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        texto: 'Crear una evaluación de Álgebra y Funciones: 1 pregunta sobre funciones lineales y 1 pregunta pidiendo graficar una función cuadrática.',
+      }),
+    });
+    if (!generarJsonRes.ok) throw new Error(`Error en Carga Inteligente (JSON): ${await generarJsonRes.text()}`);
+    const examenGeneradoJson = await generarJsonRes.json();
+    console.log('   ✅ Examen generado desde JSON:', examenGeneradoJson.titulo);
+    console.log(`      Preguntas generadas: ${examenGeneradoJson.preguntas.length}`);
+
+    // 4b. Generación a partir de archivo multipart/form-data
+    console.log('   4b. Generando examen a partir de archivo TXT multipart/form-data...');
+    const temarioContent = 'Temario: Cinemática y Movimiento Rectilíneo Uniforme (MRU)\n1. Defina velocidad media.\n2. Problema de encuentro de dos móviles.';
+    const temarioBlob = new Blob([temarioContent], { type: 'text/plain' });
+    const formDataGenerar = new FormData();
+    formDataGenerar.append('file', temarioBlob, 'temario.txt');
+    formDataGenerar.append('texto', 'Generar 2 preguntas con respuestas modelo.');
+
+    const generarFileRes = await fetch(`${BACKEND_URL}/api/v1/examenes/generar`, {
+      method: 'POST',
+      body: formDataGenerar,
+    });
+    if (!generarFileRes.ok) throw new Error(`Error en Carga Inteligente (Multipart): ${await generarFileRes.text()}`);
+    const examenGeneradoFile = await generarFileRes.json();
+    console.log('   ✅ Examen generado desde archivo:', examenGeneradoFile.titulo);
+
+    // 4c. Validación de rechazo ante entrada vacía (Error 400)
+    console.log('   4c. Verificando validación 400 ante payload vacío...');
+    const generarVacioRes = await fetch(`${BACKEND_URL}/api/v1/examenes/generar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (generarVacioRes.status === 400) {
+      console.log('   ✅ Error 400 retornado correctamente ante solicitud sin texto ni archivo.');
+    } else {
+      throw new Error(`Se esperaba status 400 pero se recibió ${generarVacioRes.status}`);
+    }
+
+    // 5. Guardar el Examen Generado por IA en el Curso
+    console.log(`\n5. Guardando el examen generado en el curso ${curso.id} (POST /api/v1/cursos/:id/examenes)...`);
     const examenRes = await fetch(`${BACKEND_URL}/api/v1/cursos/${curso.id}/examenes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        titulo: 'Examen de Álgebra',
-        preguntas: [
-          {
-            enunciado: '¿Cuánto es 2 + 2?',
-            respuestaEsperada: '4',
-            puntajeMaximo: 5,
-            criteriosIA: 'Aceptar resolución paso a paso',
-            esEvaluacionVisual: false,
-          },
-          {
-            enunciado: 'Dibuje una función lineal creciente.',
-            respuestaEsperada: 'Un gráfico con una recta de pendiente positiva',
-            puntajeMaximo: 5,
-            esEvaluacionVisual: true, // Esto forzará estado REQUIERE_REVISION por ser pregunta visual
-          },
-        ],
+        titulo: examenGeneradoJson.titulo,
+        preguntas: examenGeneradoJson.preguntas,
       }),
     });
     if (!examenRes.ok) throw new Error(`Error creando examen: ${await examenRes.text()}`);
     const examen = await examenRes.json();
-    console.log('✅ Examen creado con éxito:', examen);
+    console.log('✅ Examen guardado con éxito en la base de datos:', examen.id, `(Preguntas: ${examen.preguntas.length})`);
 
-    // 5. Crear una Entrega (Subida de archivo)
-    console.log('\n5. Creando una entrega con un archivo ficticio (POST /api/v1/entregas)...');
+    // 6. Validaciones y Creación de Entrega (POST /api/v1/entregas)
+    console.log('\n6. Probando validaciones y subida de entregas (POST /api/v1/entregas)...');
     
-    // Creamos un archivo dummy en memoria
-    const fileContent = 'Contenido del examen de prueba';
-    const blob = new Blob([fileContent], { type: 'text/plain' });
-    const formData = new FormData();
-    formData.append('examId', examen.id);
-    formData.append('alumnoId', alumno.id);
-    formData.append('file', blob, 'examen_algebra.txt');
+    // 6a. Validación de rechazo por tipo de archivo no soportado (ej. text/plain o zip)
+    console.log('   6a. Verificando rechazo 400 ante tipo MIME no soportado (text/plain)...');
+    const invalidMimeBlob = new Blob(['Contenido de texto no soportado'], { type: 'text/plain' });
+    const invalidMimeForm = new FormData();
+    invalidMimeForm.append('examId', examen.id);
+    invalidMimeForm.append('alumnoId', alumno.id);
+    invalidMimeForm.append('file', invalidMimeBlob, 'documento.txt');
+
+    const invalidMimeRes = await fetch(`${BACKEND_URL}/api/v1/entregas`, {
+      method: 'POST',
+      body: invalidMimeForm,
+    });
+    if (invalidMimeRes.status === 400) {
+      const errorJson = await invalidMimeRes.json();
+      console.log('   ✅ Error 400 retornado correctamente:', errorJson.message);
+    } else {
+      throw new Error(`Se esperaba status 400 por tipo no soportado pero se recibió ${invalidMimeRes.status}`);
+    }
+
+    // 6b. Validación de rechazo por tamaño de archivo excesivo (> 10MB)
+    console.log('   6b. Verificando rechazo 400 ante archivo que excede el tamaño máximo (11MB)...');
+    const largeBuffer = new Uint8Array(11 * 1024 * 1024); // 11MB
+    const largeBlob = new Blob([largeBuffer], { type: 'application/pdf' });
+    const largeForm = new FormData();
+    largeForm.append('examId', examen.id);
+    largeForm.append('alumnoId', alumno.id);
+    largeForm.append('file', largeBlob, 'archivo_gigante.pdf');
+
+    const largeRes = await fetch(`${BACKEND_URL}/api/v1/entregas`, {
+      method: 'POST',
+      body: largeForm,
+    });
+    if (largeRes.status === 400) {
+      const errorJson = await largeRes.json();
+      console.log('   ✅ Error 400 retornado correctamente ante archivo excedido:', errorJson.message);
+    } else {
+      throw new Error(`Se esperaba status 400 por tamaño pero se recibió ${largeRes.status}`);
+    }
+
+    // 6c. Subida exitosa con formato soportado (application/pdf)
+    console.log('   6c. Subiendo entrega válida con formato PDF soportado...');
+    const validPdfContent = '%PDF-1.4 Examen resuelto de Matematica';
+    const validPdfBlob = new Blob([validPdfContent], { type: 'application/pdf' });
+    const validForm = new FormData();
+    validForm.append('examId', examen.id);
+    validForm.append('alumnoId', alumno.id);
+    validForm.append('file', validPdfBlob, 'examen_algebra.pdf');
 
     const entregaRes = await fetch(`${BACKEND_URL}/api/v1/entregas`, {
       method: 'POST',
-      body: formData, // Fetch mapea automáticamente los headers y boundary para FormData
+      body: validForm,
     });
-    if (!entregaRes.ok) throw new Error(`Error subiendo entrega: ${await entregaRes.text()}`);
+    if (!entregaRes.ok) throw new Error(`Error subiendo entrega válida: ${await entregaRes.text()}`);
     let entrega = await entregaRes.json();
-    console.log('✅ Entrega subida con éxito (en estado PENDIENTE):', entrega);
+    console.log('   ✅ Entrega subida con éxito (en estado PENDIENTE):', entrega.id);
 
-    // 6. Consultar la entrega (esperando el procesamiento asíncrono en background)
-    console.log('\n6. Consultando el estado de la entrega en background (GET /api/v1/entregas/:id)...');
+    // 7. Probar Endpoints de Listado de Entregas (GET /api/v1/entregas)
+    console.log('\n7. Probando endpoints de listado de entregas (GET /api/v1/entregas)...');
+
+    // 7a. Listar entregas por examenId
+    console.log(`   7a. Listando entregas por examenId=${examen.id}...`);
+    const listExamenRes = await fetch(`${BACKEND_URL}/api/v1/entregas?examenId=${examen.id}`);
+    if (!listExamenRes.ok) throw new Error(`Error listando entregas por examen: ${await listExamenRes.text()}`);
+    const entregasExamen = await listExamenRes.json();
+    console.log(`   ✅ Entregas encontradas para el examen: ${entregasExamen.length}`);
+
+    // 7b. Listar entregas por alumnoId
+    console.log(`   7b. Listando entregas por alumnoId=${alumno.id}...`);
+    const listAlumnoRes = await fetch(`${BACKEND_URL}/api/v1/entregas?alumnoId=${alumno.id}`);
+    if (!listAlumnoRes.ok) throw new Error(`Error listando entregas por alumno: ${await listAlumnoRes.text()}`);
+    const entregasAlumno = await listAlumnoRes.json();
+    console.log(`   ✅ Entregas encontradas para el alumno: ${entregasAlumno.length}`);
+
+    // 7c. Verificación de rechazo 400 si no se envían parámetros de filtro
+    console.log('   7c. Verificando rechazo 400 en listado sin parámetros...');
+    const listSinFiltroRes = await fetch(`${BACKEND_URL}/api/v1/entregas`);
+    if (listSinFiltroRes.status === 400) {
+      const errorJson = await listSinFiltroRes.json();
+      console.log('   ✅ Error 400 retornado correctamente sin filtros:', errorJson.message);
+    } else {
+      throw new Error(`Se esperaba status 400 al listar sin filtros pero se recibió ${listSinFiltroRes.status}`);
+    }
+
+    // 8. Consultar la entrega (esperando el procesamiento asíncrono en background)
+    console.log('\n8. Consultando el estado de la entrega en background (GET /api/v1/entregas/:id)...');
     console.log('Esperando 3 segundos a que actúe la IA (Gemini/OpenRouter)...');
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
@@ -107,8 +206,8 @@ async function runTests() {
     console.log('✅ Estado actual de la entrega:', entrega.estado);
     console.log('   Sugerencias de Corrección:', entrega.correccion ? entrega.correccion : 'No procesada aún por la IA');
 
-    // 7. Aprobar la entrega por parte del profesor
-    console.log(`\n7. Aprobando la entrega ${entrega.id} (PUT /api/v1/entregas/:id/aprobar)...`);
+    // 9. Aprobar la entrega por parte del profesor
+    console.log(`\n9. Aprobando la entrega ${entrega.id} (PUT /api/v1/entregas/:id/aprobar)...`);
     const aprobarRes = await fetch(`${BACKEND_URL}/api/v1/entregas/${entrega.id}/aprobar`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

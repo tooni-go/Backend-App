@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -5,9 +6,13 @@ import { join } from 'path';
 import * as fs from 'fs';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
+import { MulterExceptionFilter } from './common/filters/multer-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Registrar filtro global para errores de carga de archivos (Multer)
+  app.useGlobalFilters(new MulterExceptionFilter());
 
   // Validaciones globales usando class-validator
   app.useGlobalPipes(
@@ -18,8 +23,11 @@ async function bootstrap() {
     }),
   );
 
-  // Crear la carpeta uploads si no existe
-  const uploadsDir = join(__dirname, '..', 'uploads');
+  // Resolver la carpeta de uploads de manera configurable y consistente entre dev y prod
+  const customUploadsDir = process.env.UPLOADS_DIR;
+  const uploadsDir = customUploadsDir
+    ? (customUploadsDir.startsWith('/') ? customUploadsDir : join(process.cwd(), customUploadsDir))
+    : join(process.cwd(), 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
@@ -52,9 +60,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
+  const port = process.env.PORT || 3000;
+  await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://localhost:${port}`);
   console.log(`Swagger documentation is available at: http://localhost:${port}/api/docs`);
 }
-bootstrap();
+void bootstrap();
