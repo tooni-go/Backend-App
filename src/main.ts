@@ -30,7 +30,7 @@ async function bootstrap() {
   // Habilitar CORS para permitir llamadas desde el frontend
   app.enableCors();
 
-  const port = 3000;
+  const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://0.0.0.0:${port}`);
 }

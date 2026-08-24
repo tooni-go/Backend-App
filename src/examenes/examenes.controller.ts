@@ -1,6 +1,8 @@
 import {
   Controller,
+  Get,
   Post,
+  Param,
   Body,
   UploadedFile,
   UseInterceptors,
@@ -29,5 +31,13 @@ export class ExamenesController {
       texto,
       file,
     });
+  }
+
+  /**
+   * Obtiene el detalle de un examen específico con sus preguntas y el curso con sus alumnos anidados.
+   */
+  @Get(':id')
+  async getExamen(@Param('id') id: string) {
+    return this.examenesService.getExamen(id);
   }
 }
