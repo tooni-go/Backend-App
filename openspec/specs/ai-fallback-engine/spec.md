@@ -1,4 +1,9 @@
-## ADDED Requirements
+# ai-fallback-engine Specification
+
+## Purpose
+Provide a resilient AI grading and evaluation engine integrating Gemini API as the primary provider with automatic transparent fallback to OpenRouter, enforcing strict JSON output validation, confidence scoring, and state transitions.
+
+## Requirements
 
 ### Requirement: Primary AI Grading Request
 The system SHALL request exam grading suggestions from the Gemini API using multimodal analysis (supporting image/jpeg, image/png, image/webp, and application/pdf).
@@ -56,4 +61,3 @@ The system MUST evaluate the confidence level and exam attributes to set the app
 #### Scenario: Schema validation failure or catastrophic AI error
 - **WHEN** the AI response is not valid JSON, fails Zod schema validation, or both providers fail
 - **THEN** the submission status is set to `REQUIERE_REVISION` and evaluation is set to null, allowing manual teacher correction.
-
