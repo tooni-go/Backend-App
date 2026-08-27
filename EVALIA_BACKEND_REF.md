@@ -128,7 +128,32 @@ Este archivo sirve como especificación técnica del backend de **EvalIA** para 
 
 ---
 
-### 3. Entregas y Correcciones
+### 3. Extracción de Documentos (Revisión Previa)
+
+#### **Extraer Texto de Documento o Imagen**
+- **Método & Ruta:** `POST /api/v1/documentos/extraer-texto`
+- **Request Format:** `multipart/form-data`
+- **Campos del Formulario:**
+  - `file` (File/Blob, requerido): Archivo de entrada (`.txt`, `.docx`, `.pdf`, `.jpg`, `.jpeg`, `.png`, `.webp`).
+- **Comportamiento por Formato:**
+  - **TXT (`text/plain`):** Decodificación directa UTF-8 desde memoria sin llamada a IA (`fuenteTipo: "txt"`, `requiereRevision: false`).
+  - **DOCX (`application/vnd.openxmlformats-officedocument.wordprocessingml.document`):** Extracción determinística con `mammoth` (`fuenteTipo: "docx"`, `requiereRevision: false`).
+  - **PDF (`application/pdf`) e Imágenes (JPG/PNG/WEBP):** Transcripción textual estricta con Gemini API y fallback resiliente a OpenRouter (`fuenteTipo: "pdf" | "imagen"`, `requiereRevision: true`).
+- **Response (JSON):**
+  ```json
+  {
+    "textoExtraido": "Tema 1: Cinemática\n1. Enunciar las leyes del Movimiento Rectilíneo Uniforme...\n2. Resolver el problema...",
+    "fuenteTipo": "docx",
+    "requiereRevision": false
+  }
+  ```
+- **Errores:**
+  - `400 Bad Request`: Si falta el archivo, el tipo MIME no está soportado o supera el límite de tamaño (`MAX_UPLOAD_SIZE_MB`).
+
+---
+
+### 4. Entregas y Correcciones
+
 
 #### **Crear y Subir una Entrega**
 - **Método & Ruta:** `POST /api/v1/entregas`

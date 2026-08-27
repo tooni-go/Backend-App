@@ -24,6 +24,15 @@ export const SUPPORTED_EXAM_GENERATION_MIME_TYPES = [
   'text/plain',
 ];
 
+export const SUPPORTED_EXTRACTION_AI_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+];
+
+
 export const AiQuestionEvaluationSchema = z.object({
   preguntaId: z.string(),
   textoDetectado: z.string(),
@@ -622,6 +631,230 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
   }
 
   /**
+   * Extrae y transcribe fielmente el texto contenido en una imagen o documento PDF utilizando IA.
+   * Usa el cliente compartido invokeGemini/invokeOpenRouter (Gemini principal, OpenRouter como fallback).
+   */
+  async extractTextFromDocument(
+    fileBuffer: Buffer,
+    mimeType: string,
+  ): Promise<string> {
+    if (!SUPPORTED_EXTRACTION_AI_MIME_TYPES.includes(mimeType)) {
+      throw new BadRequestException(
+        `Tipo de archivo '${mimeType}' no soportado para extracción por IA. Formatos permitidos: JPG, PNG, WEBP, PDF.`,
+      );
+    }
+
+    const fileBase64 = fileBuffer.toString('base64');
+    const prompt = this.buildExtractTextPrompt();
+    let extractedText = '';
+
+    // 1. Intentar llamar a Gemini API (Proveedor principal)
+    try {
+      this.logger.log('Iniciando extracción de texto con Gemini API...');
+      extractedText = await this.invokeGemini({
+        prompt,
+        fileBase64,
+        mimeType,
+        allowEmpty: true,
+        timeoutErrorMessage:
+          'Timeout de 30 segundos en Gemini API alcanzado durante extracción de texto',
+      });
+      this.logger.log('Texto extraído exitosamente con Gemini.');
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Fallo en Gemini API durante extracción de texto: ${errorMessage}. Conmutando a OpenRouter...`,
+      );
+
+      // 2. Fallback a OpenRouter (Proveedor secundario)
+      try {
+        extractedText = await this.invokeOpenRouter({
+          prompt,
+          fileBase64,
+          mimeType,
+          jsonResponse: false,
+          allowEmpty: true,
+          logLabel: 'extracción de texto',
+        });
+        this.logger.log('Texto extraído exitosamente con OpenRouter.');
+      } catch (fallbackError: unknown) {
+        const fbMessage =
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : String(fallbackError);
+        this.logger.error(
+          `Fallo también en el fallback de OpenRouter para extracción de texto: ${fbMessage}`,
+        );
+        throw new InternalServerErrorException(
+          'No fue posible extraer el texto del documento con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
+        );
+      }
+    }
+
+    return (extractedText || '').trim();
+  }
+
+  /**
+   * Construye el prompt para la transcripción fiel de texto sin interpretaciones ni resúmenes.
+   */
+  private buildExtractTextPrompt(): string {
+    return `Actúa como un transcriptor y sistema OCR de alta precisión.
+Tu única tarea es transcribir exactamente todo el texto legible que aparece en el documento o imagen adjunta, respetando su redacción original, saltos de línea y estructura.
+
+REGLAS ESTRICTAS:
+1. No resumas, no interpretes, no agregues explicaciones, no corrijas errores ortográficos del original ni agregues introducciones o despedidas.
+2. Transcribe únicamente el texto tal cual está escrito en el archivo.
+3. Si el archivo está en blanco, es ilegible, borroso o no contiene ningún tipo de texto identificable, responde ÚNICAMENTE con una cadena vacía (sin texto de relleno ni aclaraciones).`;
+  }
+
+  /**
+   * Cliente reutilizable de Gemini (SDK + timeout). Usado por extracción de texto;
+   * generateExam conserva sus wrappers actuales para no alterar ese flujo.
+   */
+  private async invokeGemini(params: {
+    prompt: string;
+    fileBase64?: string;
+    mimeType?: string;
+    jsonResponse?: boolean;
+    allowEmpty?: boolean;
+    timeoutErrorMessage?: string;
+  }): Promise<string> {
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error('GEMINI_API_KEY no configurado en el entorno.');
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    const modelName =
+      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+
+    const contents: Array<
+      string | { inlineData: { data: string; mimeType: string } }
+    > = [];
+
+    if (params.fileBase64 && params.mimeType) {
+      contents.push({
+        inlineData: {
+          data: params.fileBase64,
+          mimeType: params.mimeType,
+        },
+      });
+    }
+    contents.push(params.prompt);
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(
+            new Error(
+              params.timeoutErrorMessage ||
+                'Timeout de 30 segundos en Gemini API alcanzado',
+            ),
+          ),
+        30000,
+      ),
+    );
+
+    const apiCallPromise = (async () => {
+      const result = await ai.models.generateContent({
+        model: modelName,
+        contents,
+        config: params.jsonResponse
+          ? { responseMimeType: 'application/json' }
+          : undefined,
+      });
+      const text = result.text;
+      if (!text && !params.allowEmpty) {
+        throw new Error('Respuesta vacía recibida de Gemini API.');
+      }
+      return text || '';
+    })();
+
+    return Promise.race([apiCallPromise, timeoutPromise]);
+  }
+
+  /**
+   * Cliente reutilizable de OpenRouter. Mismo contrato multimodal que Gemini.
+   */
+  private async invokeOpenRouter(params: {
+    prompt: string;
+    fileBase64?: string;
+    mimeType?: string;
+    jsonResponse?: boolean;
+    allowEmpty?: boolean;
+    logLabel?: string;
+  }): Promise<string> {
+    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+    if (!apiKey) {
+      throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
+    }
+
+    const modelName =
+      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+    this.logger.log(
+      `Llamando a OpenRouter${params.logLabel ? ` para ${params.logLabel}` : ''} usando el modelo: ${modelName}...`,
+    );
+
+    const contents: Array<
+      | { type: 'text'; text: string }
+      | { type: 'image_url'; image_url: { url: string } }
+    > = [{ type: 'text', text: params.prompt }];
+
+    if (params.fileBase64 && params.mimeType) {
+      contents.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${params.mimeType};base64,${params.fileBase64}`,
+        },
+      });
+    }
+
+    const body: Record<string, unknown> = {
+      model: modelName,
+      messages: [
+        {
+          role: 'user',
+          content: contents,
+        },
+      ],
+    };
+    if (params.jsonResponse) {
+      body.response_format = { type: 'json_object' };
+    }
+
+    const response = await fetch(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://evalia.com',
+          'X-Title': 'EvalIA',
+        },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(
+        `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text && !params.allowEmpty) {
+      throw new Error('Respuesta vacía de OpenRouter API.');
+    }
+    return text || '';
+  }
+
+  /**
    * Limpia posibles marcas de formato markdown si la IA ignora las instrucciones de formato limpio.
    */
   private cleanMarkdownJson(text: string): string {
@@ -638,3 +871,4 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     return clean.trim();
   }
 }
+
