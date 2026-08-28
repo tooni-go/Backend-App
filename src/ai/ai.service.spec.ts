@@ -1,10 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { GoogleGenAI } from '@google/genai';
 import {
   AiService,
   GeneratedExamSchema,
   GeneratedQuestionSchema,
 } from './ai.service';
 import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+
+jest.mock('@google/genai');
 
 describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)', () => {
   let service: AiService;
@@ -288,6 +291,125 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
           mimeType: 'audio/mp3',
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('Fallback Structured Logging & Metrics Counter', () => {
+    const mockExam = {
+      titulo: 'Examen de Prueba',
+      preguntas: [
+        {
+          enunciado: 'Pregunta 1',
+          respuestaEsperada: 'Respuesta 1',
+          puntajeMaximo: 10,
+          criteriosIA: 'Criterio 1',
+          esEvaluacionVisual: false,
+        },
+      ],
+    };
+
+    it('llama a logFallbackEvent exactamente una vez con el flujo correcto cuando Gemini falla y OpenRouter tiene éxito', async () => {
+      const logFallbackSpy = jest.spyOn(service as any, 'logFallbackEvent');
+
+      jest
+        .spyOn(service as any, 'callGeminiForExamGeneration')
+        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+
+      jest
+        .spyOn(service as any, 'callOpenRouterForExamGeneration')
+        .mockResolvedValue(JSON.stringify(mockExam));
+
+      await service.generateExam({ texto: 'Consigna' });
+
+      expect(logFallbackSpy).toHaveBeenCalledTimes(1);
+      expect(logFallbackSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flujo: 'generacion',
+          proveedorFallido: 'gemini',
+          proveedorActivado: 'openrouter',
+          error: expect.any(Error),
+        }),
+      );
+    });
+
+    it('llama a logFallbackEvent dos veces (una por cada proveedor) cuando ambos fallan en generateExam', async () => {
+      const logFallbackSpy = jest.spyOn(service as any, 'logFallbackEvent');
+
+      jest
+        .spyOn(service as any, 'callGeminiForExamGeneration')
+        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+
+      jest
+        .spyOn(service as any, 'callOpenRouterForExamGeneration')
+        .mockRejectedValue(new Error('OpenRouter API respondió con estado 502: Bad Gateway'));
+
+      await expect(
+        service.generateExam({ texto: 'Consigna' }),
+      ).rejects.toThrow(InternalServerErrorException);
+
+      expect(logFallbackSpy).toHaveBeenCalledTimes(2);
+      expect(logFallbackSpy).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          flujo: 'generacion',
+          proveedorFallido: 'gemini',
+          proveedorActivado: 'openrouter',
+        }),
+      );
+      expect(logFallbackSpy).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          flujo: 'generacion',
+          proveedorFallido: 'openrouter',
+          proveedorActivado: 'ninguno',
+        }),
+      );
+    });
+
+    it('registra métricas correctamente tras 3 llamadas exitosas a Gemini y 1 fallback a OpenRouter', async () => {
+      process.env.GEMINI_API_KEY = 'test-gemini-key';
+      process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+
+      const mockGenerateContent = jest.fn().mockResolvedValue({
+        text: JSON.stringify(mockExam),
+      });
+
+      (GoogleGenAI as unknown as jest.Mock).mockImplementation(() => ({
+        models: {
+          generateContent: mockGenerateContent,
+        },
+      }));
+
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify(mockExam) } }],
+        }),
+      } as any);
+
+      try {
+        // 3 llamadas exitosas a Gemini
+        await service.generateExam({ texto: 'Examen 1' });
+        await service.generateExam({ texto: 'Examen 2' });
+        await service.generateExam({ texto: 'Examen 3' });
+
+        // 1 llamada que falla en Gemini y va a OpenRouter con éxito
+        mockGenerateContent.mockRejectedValueOnce(
+          new Error('Gemini API 503 Service Unavailable'),
+        );
+
+        await service.generateExam({ texto: 'Examen 4 (Fallback)' });
+
+        const metrics = service.getMetrics();
+
+        expect(metrics).toEqual({
+          gemini: { intentos: 4, exitos: 3, fallos: 1 },
+          openrouter: { intentos: 1, exitos: 1, fallos: 0 },
+        });
+      } finally {
+        global.fetch = originalFetch;
+      }
     });
   });
 });

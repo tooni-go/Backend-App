@@ -101,6 +101,57 @@ export interface GenerateExamInput {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
 
+  private readonly metrics = {
+    gemini: { intentos: 0, exitos: 0, fallos: 0 },
+    openrouter: { intentos: 0, exitos: 0, fallos: 0 },
+  };
+
+  /**
+   * Retorna una copia de las métricas en memoria de uso de los proveedores de IA.
+   */
+  getMetrics() {
+    return {
+      gemini: { ...this.metrics.gemini },
+      openrouter: { ...this.metrics.openrouter },
+    };
+  }
+
+  /**
+   * Emite un log estructurado en formato JSON con la información del evento de fallback.
+   */
+  private logFallbackEvent(params: {
+    flujo: 'evaluacion' | 'generacion' | 'extraccion';
+    proveedorFallido: 'gemini' | 'openrouter';
+    error: unknown;
+    proveedorActivado: 'openrouter' | 'ninguno';
+  }): void {
+    const causa =
+      params.error instanceof Error
+        ? params.error.message
+        : String(params.error);
+
+    let tipoError: 'timeout' | 'api_error' | 'unknown' = 'unknown';
+    if (/timeout/i.test(causa)) {
+      tipoError = 'timeout';
+    } else if (
+      /\b(4\d\d|5\d\d)\b/.test(causa) ||
+      /estado \d+/i.test(causa) ||
+      /status \d+/i.test(causa)
+    ) {
+      tipoError = 'api_error';
+    }
+
+    const payload = {
+      flujo: params.flujo,
+      proveedorFallido: params.proveedorFallido,
+      causa,
+      tipoError,
+      proveedorActivado: params.proveedorActivado,
+    };
+
+    this.logger.warn(`FALLBACK_EVENT ${JSON.stringify(payload)}`);
+  }
+
   /**
    * Evalúa una entrega utilizando Gemini con fallback automático hacia OpenRouter.
    * Determina también el estado de la entrega en base a las reglas de negocio.
@@ -132,24 +183,24 @@ export class AiService {
       );
       this.logger.log('Respuesta recibida exitosamente de Gemini.');
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Fallo en Gemini API: ${errorMessage}. Conmutando a OpenRouter...`,
-      );
+      this.logFallbackEvent({
+        flujo: 'evaluacion',
+        proveedorFallido: 'gemini',
+        error,
+        proveedorActivado: 'openrouter',
+      });
 
       // 2. Fallback a OpenRouter (Proveedor secundario)
       try {
         responseText = await this.callOpenRouter(fileBase64, mimeType, prompt);
         this.logger.log('Respuesta recibida exitosamente de OpenRouter.');
       } catch (fallbackError: unknown) {
-        const fbMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-        this.logger.error(
-          `Fallo también en el fallback de OpenRouter: ${fbMessage}`,
-        );
+        this.logFallbackEvent({
+          flujo: 'evaluacion',
+          proveedorFallido: 'openrouter',
+          error: fallbackError,
+          proveedorActivado: 'ninguno',
+        });
         return { evaluation: null, finalState: 'REQUIERE_REVISION' };
       }
     }
@@ -247,11 +298,12 @@ export class AiService {
       this.logger.log('Examen generado y validado exitosamente con Gemini.');
       return exam;
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Fallo en Gemini API durante generación de examen: ${errorMessage}. Conmutando a OpenRouter...`,
-      );
+      this.logFallbackEvent({
+        flujo: 'generacion',
+        proveedorFallido: 'gemini',
+        error,
+        proveedorActivado: 'openrouter',
+      });
 
       // 2. Fallback a OpenRouter (Proveedor secundario) y validar respuesta
       try {
@@ -265,13 +317,12 @@ export class AiService {
         this.logger.log('Examen generado y validado exitosamente con OpenRouter.');
         return exam;
       } catch (fallbackError: unknown) {
-        const fbMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-        this.logger.error(
-          `Fallo también en el fallback de OpenRouter para generación de examen: ${fbMessage}`,
-        );
+        this.logFallbackEvent({
+          flujo: 'generacion',
+          proveedorFallido: 'openrouter',
+          error: fallbackError,
+          proveedorActivado: 'ninguno',
+        });
         throw new InternalServerErrorException(
           'No fue posible generar el examen con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
         );
@@ -400,54 +451,67 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     mimeType: string,
     prompt: string,
   ): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY no configurado en el entorno.');
-    }
-
-    if (!SUPPORTED_SUBMISSION_MIME_TYPES.includes(mimeType)) {
-      throw new Error(
-        `Tipo MIME no soportado: ${mimeType}. Formatos permitidos: JPG, PNG, WEBP, PDF.`,
-      );
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const modelName =
-      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
-
-    const filePart = {
-      inlineData: {
-        data: fileBase64,
-        mimeType: mimeType,
-      },
-    };
-
-    // Timeout Promise (30s)
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(new Error('Timeout de 30 segundos en Gemini API alcanzado')),
-        30000,
-      ),
-    );
-
-    // Call Promise
-    const apiCallPromise = (async () => {
-      const result = await ai.models.generateContent({
-        model: modelName,
-        contents: [filePart, prompt],
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-      const text = result.text;
-      if (!text) {
-        throw new Error('Respuesta vacía recibida de Gemini API.');
+    this.metrics.gemini.intentos++;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY no configurado en el entorno.');
       }
-      return text;
-    })();
 
-    return Promise.race([apiCallPromise, timeoutPromise]);
+      if (!SUPPORTED_SUBMISSION_MIME_TYPES.includes(mimeType)) {
+        throw new Error(
+          `Tipo MIME no soportado: ${mimeType}. Formatos permitidos: JPG, PNG, WEBP, PDF.`,
+        );
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      const modelName =
+        process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+
+      const filePart = {
+        inlineData: {
+          data: fileBase64,
+          mimeType: mimeType,
+        },
+      };
+
+      // Timeout Promise (30s)
+      let timerId: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timerId = setTimeout(
+          () =>
+            reject(new Error('Timeout de 30 segundos en Gemini API alcanzado')),
+          30000,
+        );
+      });
+
+      // Call Promise
+      const apiCallPromise = (async () => {
+        const result = await ai.models.generateContent({
+          model: modelName,
+          contents: [filePart, prompt],
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+        const text = result.text;
+        if (!text) {
+          throw new Error('Respuesta vacía recibida de Gemini API.');
+        }
+        return text;
+      })();
+
+      try {
+        const result = await Promise.race([apiCallPromise, timeoutPromise]);
+        this.metrics.gemini.exitos++;
+        return result;
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
+    } catch (error) {
+      this.metrics.gemini.fallos++;
+      throw error;
+    }
   }
 
   /**
@@ -458,53 +522,66 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     fileBase64?: string,
     mimeType?: string,
   ): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY no configurado en el entorno.');
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const modelName =
-      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
-
-    const contents: Array<
-      string | { inlineData: { data: string; mimeType: string } }
-    > = [];
-
-    if (fileBase64 && mimeType) {
-      contents.push({
-        inlineData: {
-          data: fileBase64,
-          mimeType: mimeType,
-        },
-      });
-    }
-    contents.push(prompt);
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(new Error('Timeout de 30 segundos en Gemini API alcanzado')),
-        30000,
-      ),
-    );
-
-    const apiCallPromise = (async () => {
-      const result = await ai.models.generateContent({
-        model: modelName,
-        contents: contents,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-      const text = result.text;
-      if (!text) {
-        throw new Error('Respuesta vacía recibida de Gemini API.');
+    this.metrics.gemini.intentos++;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY no configurado en el entorno.');
       }
-      return text;
-    })();
 
-    return Promise.race([apiCallPromise, timeoutPromise]);
+      const ai = new GoogleGenAI({ apiKey });
+      const modelName =
+        process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+
+      const contents: Array<
+        string | { inlineData: { data: string; mimeType: string } }
+      > = [];
+
+      if (fileBase64 && mimeType) {
+        contents.push({
+          inlineData: {
+            data: fileBase64,
+            mimeType: mimeType,
+          },
+        });
+      }
+      contents.push(prompt);
+
+      let timerId: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timerId = setTimeout(
+          () =>
+            reject(new Error('Timeout de 30 segundos en Gemini API alcanzado')),
+          30000,
+        );
+      });
+
+      const apiCallPromise = (async () => {
+        const result = await ai.models.generateContent({
+          model: modelName,
+          contents: contents,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+        const text = result.text;
+        if (!text) {
+          throw new Error('Respuesta vacía recibida de Gemini API.');
+        }
+        return text;
+      })();
+
+      try {
+        const result = await Promise.race([apiCallPromise, timeoutPromise]);
+        this.metrics.gemini.exitos++;
+        return result;
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
+    } catch (error) {
+      this.metrics.gemini.fallos++;
+      throw error;
+    }
   }
 
   /**
@@ -515,64 +592,71 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     mimeType: string,
     prompt: string,
   ): Promise<string> {
-    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
-    }
+    this.metrics.openrouter.intentos++;
+    try {
+      const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
+      }
 
-    const modelName =
-      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
-    this.logger.log(`Llamando a OpenRouter usando el modelo: ${modelName}...`);
+      const modelName =
+        process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+      this.logger.log(`Llamando a OpenRouter usando el modelo: ${modelName}...`);
 
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://evalia.com',
-          'X-Title': 'EvalIA',
-        },
-        body: JSON.stringify({
-          model: modelName,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: prompt,
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${fileBase64}`,
+      const response = await fetch(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://evalia.com',
+            'X-Title': 'EvalIA',
+          },
+          body: JSON.stringify({
+            model: modelName,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: prompt,
                   },
-                },
-              ],
-            },
-          ],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(
-        `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: `data:${mimeType};base64,${fileBase64}`,
+                    },
+                  },
+                ],
+              },
+            ],
+          }),
+        },
       );
-    }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const text = data?.choices?.[0]?.message?.content;
-    if (!text) {
-      throw new Error('Respuesta vacía de OpenRouter API.');
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(
+          `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = data?.choices?.[0]?.message?.content;
+      if (!text) {
+        throw new Error('Respuesta vacía de OpenRouter API.');
+      }
+      this.metrics.openrouter.exitos++;
+      return text;
+    } catch (error) {
+      this.metrics.openrouter.fallos++;
+      throw error;
     }
-    return text;
   }
 
   /**
@@ -583,69 +667,76 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     fileBase64?: string,
     mimeType?: string,
   ): Promise<string> {
-    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
-    }
+    this.metrics.openrouter.intentos++;
+    try {
+      const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
+      }
 
-    const modelName =
-      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
-    this.logger.log(
-      `Llamando a OpenRouter para generación de examen usando el modelo: ${modelName}...`,
-    );
-
-    const contents: Array<
-      | { type: 'text'; text: string }
-      | { type: 'image_url'; image_url: { url: string } }
-    > = [{ type: 'text', text: prompt }];
-
-    if (fileBase64 && mimeType) {
-      contents.push({
-        type: 'image_url',
-        image_url: {
-          url: `data:${mimeType};base64,${fileBase64}`,
-        },
-      });
-    }
-
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://evalia.com',
-          'X-Title': 'EvalIA',
-        },
-        body: JSON.stringify({
-          model: modelName,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'user',
-              content: contents,
-            },
-          ],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(
-        `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+      const modelName =
+        process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+      this.logger.log(
+        `Llamando a OpenRouter para generación de examen usando el modelo: ${modelName}...`,
       );
-    }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const text = data?.choices?.[0]?.message?.content;
-    if (!text) {
-      throw new Error('Respuesta vacía de OpenRouter API.');
+      const contents: Array<
+        | { type: 'text'; text: string }
+        | { type: 'image_url'; image_url: { url: string } }
+      > = [{ type: 'text', text: prompt }];
+
+      if (fileBase64 && mimeType) {
+        contents.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${mimeType};base64,${fileBase64}`,
+          },
+        });
+      }
+
+      const response = await fetch(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://evalia.com',
+            'X-Title': 'EvalIA',
+          },
+          body: JSON.stringify({
+            model: modelName,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'user',
+                content: contents,
+              },
+            ],
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(
+          `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = data?.choices?.[0]?.message?.content;
+      if (!text) {
+        throw new Error('Respuesta vacía de OpenRouter API.');
+      }
+      this.metrics.openrouter.exitos++;
+      return text;
+    } catch (error) {
+      this.metrics.openrouter.fallos++;
+      throw error;
     }
-    return text;
   }
 
   /**
@@ -679,11 +770,12 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       });
       this.logger.log('Texto extraído exitosamente con Gemini.');
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Fallo en Gemini API durante extracción de texto: ${errorMessage}. Conmutando a OpenRouter...`,
-      );
+      this.logFallbackEvent({
+        flujo: 'extraccion',
+        proveedorFallido: 'gemini',
+        error,
+        proveedorActivado: 'openrouter',
+      });
 
       // 2. Fallback a OpenRouter (Proveedor secundario)
       try {
@@ -697,13 +789,12 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
         });
         this.logger.log('Texto extraído exitosamente con OpenRouter.');
       } catch (fallbackError: unknown) {
-        const fbMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-        this.logger.error(
-          `Fallo también en el fallback de OpenRouter para extracción de texto: ${fbMessage}`,
-        );
+        this.logFallbackEvent({
+          flujo: 'extraccion',
+          proveedorFallido: 'openrouter',
+          error: fallbackError,
+          proveedorActivado: 'ninguno',
+        });
         throw new InternalServerErrorException(
           'No fue posible extraer el texto del documento con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
         );
@@ -738,58 +829,71 @@ REGLAS ESTRICTAS:
     allowEmpty?: boolean;
     timeoutErrorMessage?: string;
   }): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY no configurado en el entorno.');
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const modelName =
-      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
-
-    const contents: Array<
-      string | { inlineData: { data: string; mimeType: string } }
-    > = [];
-
-    if (params.fileBase64 && params.mimeType) {
-      contents.push({
-        inlineData: {
-          data: params.fileBase64,
-          mimeType: params.mimeType,
-        },
-      });
-    }
-    contents.push(params.prompt);
-
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(
-            new Error(
-              params.timeoutErrorMessage ||
-                'Timeout de 30 segundos en Gemini API alcanzado',
-            ),
-          ),
-        30000,
-      ),
-    );
-
-    const apiCallPromise = (async () => {
-      const result = await ai.models.generateContent({
-        model: modelName,
-        contents,
-        config: params.jsonResponse
-          ? { responseMimeType: 'application/json' }
-          : undefined,
-      });
-      const text = result.text;
-      if (!text && !params.allowEmpty) {
-        throw new Error('Respuesta vacía recibida de Gemini API.');
+    this.metrics.gemini.intentos++;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error('GEMINI_API_KEY no configurado en el entorno.');
       }
-      return text || '';
-    })();
 
-    return Promise.race([apiCallPromise, timeoutPromise]);
+      const ai = new GoogleGenAI({ apiKey });
+      const modelName =
+        process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+
+      const contents: Array<
+        string | { inlineData: { data: string; mimeType: string } }
+      > = [];
+
+      if (params.fileBase64 && params.mimeType) {
+        contents.push({
+          inlineData: {
+            data: params.fileBase64,
+            mimeType: params.mimeType,
+          },
+        });
+      }
+      contents.push(params.prompt);
+
+      let timerId: NodeJS.Timeout | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timerId = setTimeout(
+          () =>
+            reject(
+              new Error(
+                params.timeoutErrorMessage ||
+                  'Timeout de 30 segundos en Gemini API alcanzado',
+              ),
+            ),
+          30000,
+        );
+      });
+
+      const apiCallPromise = (async () => {
+        const result = await ai.models.generateContent({
+          model: modelName,
+          contents,
+          config: params.jsonResponse
+            ? { responseMimeType: 'application/json' }
+            : undefined,
+        });
+        const text = result.text;
+        if (!text && !params.allowEmpty) {
+          throw new Error('Respuesta vacía recibida de Gemini API.');
+        }
+        return text || '';
+      })();
+
+      try {
+        const result = await Promise.race([apiCallPromise, timeoutPromise]);
+        this.metrics.gemini.exitos++;
+        return result;
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
+    } catch (error) {
+      this.metrics.gemini.fallos++;
+      throw error;
+    }
   }
 
   /**
@@ -803,73 +907,80 @@ REGLAS ESTRICTAS:
     allowEmpty?: boolean;
     logLabel?: string;
   }): Promise<string> {
-    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
-    }
+    this.metrics.openrouter.intentos++;
+    try {
+      const apiKey = process.env.OPENROUTER_API_KEY?.trim();
+      if (!apiKey) {
+        throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
+      }
 
-    const modelName =
-      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
-    this.logger.log(
-      `Llamando a OpenRouter${params.logLabel ? ` para ${params.logLabel}` : ''} usando el modelo: ${modelName}...`,
-    );
-
-    const contents: Array<
-      | { type: 'text'; text: string }
-      | { type: 'image_url'; image_url: { url: string } }
-    > = [{ type: 'text', text: params.prompt }];
-
-    if (params.fileBase64 && params.mimeType) {
-      contents.push({
-        type: 'image_url',
-        image_url: {
-          url: `data:${params.mimeType};base64,${params.fileBase64}`,
-        },
-      });
-    }
-
-    const body: Record<string, unknown> = {
-      model: modelName,
-      messages: [
-        {
-          role: 'user',
-          content: contents,
-        },
-      ],
-    };
-    if (params.jsonResponse) {
-      body.response_format = { type: 'json_object' };
-    }
-
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://evalia.com',
-          'X-Title': 'EvalIA',
-        },
-        body: JSON.stringify(body),
-      },
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(
-        `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+      const modelName =
+        process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+      this.logger.log(
+        `Llamando a OpenRouter${params.logLabel ? ` para ${params.logLabel}` : ''} usando el modelo: ${modelName}...`,
       );
-    }
 
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const text = data?.choices?.[0]?.message?.content;
-    if (!text && !params.allowEmpty) {
-      throw new Error('Respuesta vacía de OpenRouter API.');
+      const contents: Array<
+        | { type: 'text'; text: string }
+        | { type: 'image_url'; image_url: { url: string } }
+      > = [{ type: 'text', text: params.prompt }];
+
+      if (params.fileBase64 && params.mimeType) {
+        contents.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${params.mimeType};base64,${params.fileBase64}`,
+          },
+        });
+      }
+
+      const body: Record<string, unknown> = {
+        model: modelName,
+        messages: [
+          {
+            role: 'user',
+            content: contents,
+          },
+        ],
+      };
+      if (params.jsonResponse) {
+        body.response_format = { type: 'json_object' };
+      }
+
+      const response = await fetch(
+        'https://openrouter.ai/api/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://evalia.com',
+            'X-Title': 'EvalIA',
+          },
+          body: JSON.stringify(body),
+        },
+      );
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(
+          `OpenRouter API respondió con estado ${response.status}: ${errText}`,
+        );
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const text = data?.choices?.[0]?.message?.content;
+      if (!text && !params.allowEmpty) {
+        throw new Error('Respuesta vacía de OpenRouter API.');
+      }
+      this.metrics.openrouter.exitos++;
+      return text || '';
+    } catch (error) {
+      this.metrics.openrouter.fallos++;
+      throw error;
     }
-    return text || '';
   }
 
   /**
