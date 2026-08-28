@@ -33,6 +33,9 @@ PASO 2: REVISIÓN / EDICIÓN Y GENERACIÓN DE EXAMEN
 [AiService] -> Gemini / Fallback OpenRouter -> Validación Zod (GeneratedExamSchema)
 ```
 
+> **Nota sobre el flujo conectado**: `POST /api/v1/examenes/generar` es el endpoint unificado de generación de exámenes. Cuando se ejecuta como Paso 2 tras la extracción documental (`POST /api/v1/documentos/extraer-texto`), recibe el payload `{ texto: string }` con el contenido ya revisado o editado por el docente. En este caso, el backend no ejecuta ninguna re-extracción ni procesamiento intermedio de archivos: el texto fluye directo a la construcción del prompt de generación en `AiService`.
+
+
 ## Data Contracts & Schemas
 
 ### DTOs de Extracción de Texto

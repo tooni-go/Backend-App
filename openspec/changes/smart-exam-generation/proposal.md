@@ -11,7 +11,7 @@ Para agilizar el proceso de creación de evaluaciones por parte de los docentes 
 - Transcripción fiel y libre de alucinaciones para PDFs e imágenes mediante IA (Gemini API con fallback automático a OpenRouter).
 - Creación de un nuevo contrato de datos con Zod (`GeneratedQuestionSchema`, `GeneratedExamSchema`) para la salida estructurada de la IA en la generación de exámenes.
 - Extensión de `AiService` con los métodos `extractTextFromDocument` y `generateExam`, incorporando soporte multimodal y texto plano, validación de tipos MIME y el flujo de resiliencia con proveedor principal Gemini API y conmutación por error (fallback) a OpenRouter.
-- Creación del módulo y controlador `ExamenesController` con el endpoint `POST /api/v1/examenes/generar`, soportando tanto payloads JSON como `multipart/form-data`.
+- Creación del módulo y controlador `ExamenesController` con el endpoint `POST /api/v1/examenes/generar`, soportando tanto payloads JSON como `multipart/form-data`. Este mismo endpoint es el que recibe en el Paso 2 el texto revisado/editado (`{ texto: string }`) por el docente tras la extracción del Paso 1, enviándolo directamente a la generación con IA sin reprocesamiento ni re-extracción.
 - Validación estricta de formatos de archivos permitidos y manejo explícito de errores pedagógicos sin datos ficticios.
 
 ## Capabilities
