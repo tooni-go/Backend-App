@@ -25,6 +25,11 @@ export class CursosController {
     return this.cursosService.getCursos(teacherId);
   }
 
+  @Get(':id')
+  async getCurso(@Param('id') id: string) {
+    return this.cursosService.getCurso(id);
+  }
+
   @Post(':id/alumnos')
   async registerStudent(
     @Param('id') cursoId: string,

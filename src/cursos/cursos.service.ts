@@ -100,6 +100,31 @@ export class CursosService {
   }
 
   /**
+   * Obtiene un curso por ID con sus exámenes y alumnos.
+   */
+  async getCurso(cursoId: string) {
+    const curso = await this.prisma.curso.findUnique({
+      where: { id: cursoId },
+      include: {
+        examenes: {
+          include: {
+            preguntas: true,
+            _count: { select: { entregas: true } },
+          },
+          orderBy: { fecha: 'desc' },
+        },
+        alumnos: {
+          include: { alumno: true },
+        },
+      },
+    });
+    if (!curso) {
+      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+    }
+    return curso;
+  }
+
+  /**
    * Registra un alumno y lo asocia con un curso.
    */
   async addAlumnoToCurso(cursoId: string, dto: RegisterAlumnoDto) {

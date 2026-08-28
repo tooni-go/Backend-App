@@ -5,19 +5,23 @@ import {
   GeneratedExamSchema,
   GeneratedQuestionSchema,
 } from './ai.service';
+import { AiResilienceService } from './ai-resilience.service';
 import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 
 jest.mock('@google/genai');
 
 describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)', () => {
   let service: AiService;
+  let resilienceService: AiResilienceService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AiService],
+      providers: [AiService, AiResilienceService],
     }).compile();
 
     service = module.get<AiService>(AiService);
+    resilienceService = module.get<AiResilienceService>(AiResilienceService);
+    resilienceService.resetMetrics();
   });
 
   afterEach(() => {
@@ -309,7 +313,7 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
     };
 
     it('llama a logFallbackEvent exactamente una vez con el flujo correcto cuando Gemini falla y OpenRouter tiene éxito', async () => {
-      const logFallbackSpy = jest.spyOn(service as any, 'logFallbackEvent');
+      const logFallbackSpy = jest.spyOn(resilienceService, 'logFallbackEvent');
 
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
@@ -333,7 +337,7 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
     });
 
     it('llama a logFallbackEvent dos veces (una por cada proveedor) cuando ambos fallan en generateExam', async () => {
-      const logFallbackSpy = jest.spyOn(service as any, 'logFallbackEvent');
+      const logFallbackSpy = jest.spyOn(resilienceService, 'logFallbackEvent');
 
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
@@ -403,10 +407,17 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
         const metrics = service.getMetrics();
 
-        expect(metrics).toEqual({
-          gemini: { intentos: 4, exitos: 3, fallos: 1 },
-          openrouter: { intentos: 1, exitos: 1, fallos: 0 },
+        expect(metrics).toMatchObject({
+          gemini: {
+            llamadasExitosas: 3,
+            llamadasFallidas: 1,
+          },
+          openRouter: {
+            llamadasExitosas: 1,
+            llamadasFallidas: 0,
+          },
         });
+        expect(metrics.ultimaActualizacion).toBeDefined();
       } finally {
         global.fetch = originalFetch;
       }
