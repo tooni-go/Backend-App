@@ -21,6 +21,8 @@ describe('Flujo de Dos Pasos: Extracción y Generación de Examen (HTTP)', () =>
         respuestaEsperada:
           'La crisis de la monarquía española tras las invasiones napoleónicas, los antecedentes de las invasiones inglesas y el anhelo criollo de autogobierno.',
         puntajeMaximo: 5,
+        criteriosIA:
+          'Evaluar mención a la invasión napoleónica, invasiones inglesas y cabildo abierto.',
         esEvaluacionVisual: false,
       },
       {
@@ -29,6 +31,8 @@ describe('Flujo de Dos Pasos: Extracción y Generación de Examen (HTTP)', () =>
         respuestaEsperada:
           'Constituyó el primer gobierno patrio e inició el proceso formal de emancipación e independencia.',
         puntajeMaximo: 5,
+        criteriosIA:
+          'Evaluar mención al derrocamiento del virrey y formación de gobierno criollo.',
         esEvaluacionVisual: false,
       },
     ],
@@ -118,10 +122,13 @@ describe('Flujo de Dos Pasos: Extracción y Generación de Examen (HTTP)', () =>
       expect(pregunta).toHaveProperty('enunciado');
       expect(pregunta).toHaveProperty('respuestaEsperada');
       expect(pregunta).toHaveProperty('puntajeMaximo');
+      expect(pregunta).toHaveProperty('criteriosIA');
       expect(pregunta).toHaveProperty('esEvaluacionVisual');
       expect(typeof pregunta.enunciado).toBe('string');
       expect(typeof pregunta.respuestaEsperada).toBe('string');
       expect(typeof pregunta.puntajeMaximo).toBe('number');
+      expect(typeof pregunta.criteriosIA).toBe('string');
+      expect(pregunta.criteriosIA.length).toBeGreaterThan(0);
       expect(typeof pregunta.esEvaluacionVisual).toBe('boolean');
     }
 

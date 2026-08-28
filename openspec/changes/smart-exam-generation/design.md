@@ -56,14 +56,25 @@ export interface ExtraerTextoResponseDto {
 export const GeneratedQuestionSchema = z.object({
   enunciado: z.string().min(1),
   respuestaEsperada: z.string().min(1),
-  puntajeMaximo: z.number().positive(),
+  puntajeMaximo: z.number().positive().min(1).max(100),
+  criteriosIA: z.string().min(1),
   esEvaluacionVisual: z.boolean().default(false),
 });
 
-export const GeneratedExamSchema = z.object({
-  titulo: z.string().min(1),
-  preguntas: z.array(GeneratedQuestionSchema).min(1),
-});
+export const GeneratedExamSchema = z
+  .object({
+    titulo: z.string(),
+    preguntas: z.array(GeneratedQuestionSchema),
+  })
+  .refine(
+    (data) =>
+      (data.titulo === '' && data.preguntas.length === 0) ||
+      (data.titulo.trim().length > 0 && data.preguntas.length > 0),
+    {
+      message:
+        'El examen debe contener un título y al menos una pregunta válida, o bien ser un examen vacío ({ titulo: "", preguntas: [] }) si el material no tiene sentido pedagógico.',
+    },
+  );
 ```
 
 ## Error Handling Guidelines

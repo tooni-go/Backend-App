@@ -36,4 +36,4 @@ The AI output MUST be validated against `GeneratedExamSchema` before being retur
 
 #### Scenario: Output adheres to required structure
 - **WHEN** the AI response is received
-- **THEN** the system verifies that `titulo` is a non-empty string and `preguntas` is a non-empty array of questions, each with `enunciado`, `respuestaEsperada`, positive `puntajeMaximo`, and boolean `esEvaluacionVisual`.
+- **THEN** the system verifies that `titulo` is a non-empty string and `preguntas` is a non-empty array of questions, each with `enunciado`, `respuestaEsperada`, `puntajeMaximo` (between 1 and 100), `criteriosIA` (non-empty string), and boolean `esEvaluacionVisual`.

@@ -55,16 +55,29 @@ export const GeneratedQuestionSchema = z.object({
     .min(1, 'La respuesta esperada no puede estar vacía'),
   puntajeMaximo: z
     .number()
-    .positive('El puntaje máximo debe ser un número positivo'),
+    .positive('El puntaje máximo debe ser un número positivo')
+    .min(1, 'El puntaje máximo por pregunta debe ser al menos 1')
+    .max(100, 'El puntaje máximo por pregunta no puede exceder 100'),
+  criteriosIA: z
+    .string()
+    .min(1, 'Los criterios de corrección por IA no pueden estar vacíos'),
   esEvaluacionVisual: z.boolean().default(false),
 });
 
-export const GeneratedExamSchema = z.object({
-  titulo: z.string().min(1, 'El título del examen no puede estar vacío'),
-  preguntas: z
-    .array(GeneratedQuestionSchema)
-    .min(1, 'Debe generarse al menos una pregunta'),
-});
+export const GeneratedExamSchema = z
+  .object({
+    titulo: z.string(),
+    preguntas: z.array(GeneratedQuestionSchema),
+  })
+  .refine(
+    (data) =>
+      (data.titulo === '' && data.preguntas.length === 0) ||
+      (data.titulo.trim().length > 0 && data.preguntas.length > 0),
+    {
+      message:
+        'El examen debe contener un título y al menos una pregunta válida, o bien ser un examen vacío ({ titulo: "", preguntas: [] }) si el material no tiene sentido pedagógico.',
+    },
+  );
 
 export type GeneratedExam = z.infer<typeof GeneratedExamSchema>;
 export type GeneratedQuestion = z.infer<typeof GeneratedQuestionSchema>;
@@ -219,19 +232,20 @@ export class AiService {
     }
 
     const prompt = this.buildGenerateExamPrompt(rawText);
-    let responseText = '';
 
-    // 1. Intentar llamar a Gemini API (Proveedor principal)
+    // 1. Intentar llamar a Gemini API (Proveedor principal) y validar respuesta
     try {
       this.logger.log(
         'Iniciando Carga Inteligente de Examen con Gemini API...',
       );
-      responseText = await this.callGeminiForExamGeneration(
+      const geminiResponseText = await this.callGeminiForExamGeneration(
         prompt,
         fileBase64,
         mimeType,
       );
-      this.logger.log('Examen generado exitosamente con Gemini.');
+      const exam = this.parseAndValidateExamJson(geminiResponseText);
+      this.logger.log('Examen generado y validado exitosamente con Gemini.');
+      return exam;
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
@@ -239,14 +253,17 @@ export class AiService {
         `Fallo en Gemini API durante generación de examen: ${errorMessage}. Conmutando a OpenRouter...`,
       );
 
-      // 2. Fallback a OpenRouter (Proveedor secundario)
+      // 2. Fallback a OpenRouter (Proveedor secundario) y validar respuesta
       try {
-        responseText = await this.callOpenRouterForExamGeneration(
-          prompt,
-          fileBase64,
-          mimeType,
-        );
-        this.logger.log('Examen generado exitosamente con OpenRouter.');
+        const openRouterResponseText =
+          await this.callOpenRouterForExamGeneration(
+            prompt,
+            fileBase64,
+            mimeType,
+          );
+        const exam = this.parseAndValidateExamJson(openRouterResponseText);
+        this.logger.log('Examen generado y validado exitosamente con OpenRouter.');
+        return exam;
       } catch (fallbackError: unknown) {
         const fbMessage =
           fallbackError instanceof Error
@@ -260,8 +277,12 @@ export class AiService {
         );
       }
     }
+  }
 
-    // 3. Procesar y Validar la respuesta JSON
+  /**
+   * Limpia, parsea y valida el JSON devuelto por los modelos de IA contra el esquema GeneratedExamSchema.
+   */
+  private parseAndValidateExamJson(responseText: string): GeneratedExam {
     try {
       const cleanJson = this.cleanMarkdownJson(responseText);
       const parsedData: unknown = JSON.parse(cleanJson);
@@ -271,24 +292,18 @@ export class AiService {
         this.logger.warn(
           `El examen generado por la IA no cumple con el esquema esperado: ${validation.error.message}`,
         );
-        throw new InternalServerErrorException(
-          'La IA generó una respuesta que no cumple con el formato estructurado del examen.',
+        throw new Error(
+          `El JSON generado no cumple con el esquema requerido: ${validation.error.message}`,
         );
       }
 
       return validation.data;
-    } catch (parseError: unknown) {
-      if (parseError instanceof InternalServerErrorException) {
-        throw parseError;
-      }
-      const parseMessage =
-        parseError instanceof Error ? parseError.message : String(parseError);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Error al parsear el JSON del examen generado: ${parseMessage}. Respuesta recibida:\n${responseText}`,
+        `Error al interpretar el JSON del examen: ${message}. Respuesta recibida:\n${responseText}`,
       );
-      throw new InternalServerErrorException(
-        'Error al interpretar la estructura del examen generado por la IA.',
-      );
+      throw new Error(`Error al interpretar el examen generado: ${message}`);
     }
   }
 
@@ -304,11 +319,13 @@ ${texto ? `CONTENIDO / CONSIGNAS PROVISTAS POR EL DOCENTE:\n"""\n${texto}\n"""\n
 REGLAS DE GENERACIÓN PEDAGÓGICA:
 1. "titulo": Asigna un título claro y representativo del tema evaluado (ej. "Evaluación de Álgebra y Funciones Polinómicas").
 2. "preguntas": Genera una lista de preguntas claras y no ambiguas basadas estrictamente en el material provisto o el tema solicitado.
-   Para cada pregunta debes definir:
+   Para cada pregunta debes definir obligatoriamente:
    - "enunciado": La consigna o pregunta formal que responderá el alumno.
    - "respuestaEsperada": La respuesta modelo correcta, desarrollo esperado, o criterios clave que deben estar presentes para considerar la respuesta correcta.
-   - "puntajeMaximo": Puntaje numérico asignado a la pregunta (ej. 2.5, 5, 10). La suma total de los puntajes debe totalizar una escala redonda (ej. 10 o 100 puntos).
+   - "puntajeMaximo": Puntaje numérico asignado a la pregunta (entre 1 y 100). La suma total de los puntajes debe totalizar una escala redonda (ej. 10 o 100 puntos).
+   - "criteriosIA": Descripción detallada de qué debe buscar el corrector (humano o IA) al evaluar esa respuesta — por ejemplo, qué conceptos clave indispensables deben estar presentes, qué errores comunes penalizar, o cómo repartir el puntaje si la respuesta es parcialmente correcta. No puede estar vacío.
    - "esEvaluacionVisual": Booleano (true o false). Marca 'true' ÚNICAMENTE si la resolución del alumno exige obligatoriamente un dibujo, gráfico de ejes cartesianos, diagrama de flujo, esquema anatómico o construcción geométrica que requiera inspección visual humana. En caso de respuestas puramente textuales, numéricas o de desarrollo algebraico, debe ser 'false'.
+3. Si el contenido provisto no tiene sentido pedagógico identificable (texto sin significado, caracteres aleatorios o material insuficiente), responde con un JSON vacío { "titulo": "", "preguntas": [] } en lugar de inventar un tema.
 
 REQUISITO ESTRICTO DE FORMATO:
 Debes responder EXCLUSIVAMENTE un objeto JSON válido con la estructura indicada a continuación. No incluyas bloques de formato markdown (\`\`\`json ... \`\`\`), ni introducciones, explicaciones, comentarios o saludos antes o después del JSON:
@@ -320,6 +337,7 @@ Debes responder EXCLUSIVAMENTE un objeto JSON válido con la estructura indicada
       "enunciado": "Consigna de la pregunta",
       "respuestaEsperada": "Respuesta modelo o criterios de resolución esperados",
       "puntajeMaximo": 5,
+      "criteriosIA": "Conceptos clave requeridos, penalizaciones por errores comunes y distribución de puntaje parcial.",
       "esEvaluacionVisual": false
     }
   ]
