@@ -2,52 +2,85 @@
 
 ## Architecture Overview
 
-El flujo de Carga Inteligente permite a los docentes transformar material no estructurado (texto libre, archivos PDF, imágenes escaneadas o notas en TXT) en un examen estructurado listo para ser revisado y guardado en un curso.
+El flujo de Carga Inteligente permite a los docentes transformar material no estructurado (texto libre, archivos DOCX, PDF, imágenes escaneadas o notas en TXT) en un examen estructurado listo para ser revisado y guardado en un curso.
+
+Para otorgar mayor control al docente, el sistema separa la extracción de texto de la generación de consignas:
 
 ```text
+PASO 1: EXTRACCIÓN DE TEXTO
 [Cliente / Frontend]
         │
-        ▼ (POST /api/v1/examenes/generar)
+        ▼ (POST /api/v1/documentos/extraer-texto)
+[DocumentosController]
+        │
+        ▼ (extractText)
+[DocumentosService]
+        │
+        ├── TXT -> Decodificación directa UTF-8 (Determinístico, sin IA, requiereRevision: false)
+        ├── DOCX -> Extracción con mammoth (Determinístico, sin IA, requiereRevision: false)
+        └── PDF / Imágenes -> AiService.extractTextFromDocument (requiereRevision: true)
+                │
+                ├── Gemini API (Proveedor principal - OCR/Transcripción literal)
+                └── OpenRouter (Fallback automático ante fallas o timeout)
+
+PASO 2: REVISIÓN / EDICIÓN Y GENERACIÓN DE EXAMEN
+[Cliente / Frontend] (Docente revisa/edita texto extraído)
+        │
+        ▼ (POST /api/v1/examenes/generar con { texto })
 [ExamenesController]
         │
         ▼ (generateExam)
-[AiService]
-        │
-        ├── 1. Validación de Entrada y Formatos MIME
-        │      - TXT -> Conversión directa a UTF-8
-        │      - PDF / JPG / PNG / WEBP -> Multimodal (Base64)
-        │
-        ├── 2. Proveedor Principal: Gemini API (gemini-1.5-flash)
-        │      - Timeout: 15 segundos
-        │      - Formato: JSON Object
-        │
-        ├── 3. Proveedor Secundario (Fallback): OpenRouter (openai/gpt-4o-mini)
-        │      - Activado ante timeout, 429 quota o 5xx
-        │
-        └── 4. Validación Estricta con Zod (GeneratedExamSchema)
-               - titulo: string
-               - preguntas: Array<{ enunciado, respuestaEsperada, puntajeMaximo, esEvaluacionVisual }>
+[AiService] -> Gemini / Fallback OpenRouter -> Validación Zod (GeneratedExamSchema)
 ```
+
+> **Nota sobre el flujo conectado**: `POST /api/v1/examenes/generar` es el endpoint unificado de generación de exámenes. Cuando se ejecuta como Paso 2 tras la extracción documental (`POST /api/v1/documentos/extraer-texto`), recibe el payload `{ texto: string }` con el contenido ya revisado o editado por el docente. En este caso, el backend no ejecuta ninguna re-extracción ni procesamiento intermedio de archivos: el texto fluye directo a la construcción del prompt de generación en `AiService`.
+
 
 ## Data Contracts & Schemas
 
-### Zod Schemas
+### DTOs de Extracción de Texto
+
+```typescript
+export type FuenteTipo = 'txt' | 'docx' | 'pdf' | 'imagen';
+
+export interface ExtraerTextoResponseDto {
+  textoExtraido: string;
+  fuenteTipo: FuenteTipo;
+  requiereRevision: boolean;
+}
+```
+
+### Zod Schemas de Generación de Exámenes
 
 ```typescript
 export const GeneratedQuestionSchema = z.object({
   enunciado: z.string().min(1),
   respuestaEsperada: z.string().min(1),
-  puntajeMaximo: z.number().positive(),
+  puntajeMaximo: z.number().positive().min(1).max(100),
+  criteriosIA: z.string().min(1),
   esEvaluacionVisual: z.boolean().default(false),
 });
 
-export const GeneratedExamSchema = z.object({
-  titulo: z.string().min(1),
-  preguntas: z.array(GeneratedQuestionSchema).min(1),
-});
+export const GeneratedExamSchema = z
+  .object({
+    titulo: z.string(),
+    preguntas: z.array(GeneratedQuestionSchema),
+  })
+  .refine(
+    (data) =>
+      (data.titulo === '' && data.preguntas.length === 0) ||
+      (data.titulo.trim().length > 0 && data.preguntas.length > 0),
+    {
+      message:
+        'El examen debe contener un título y al menos una pregunta válida, o bien ser un examen vacío ({ titulo: "", preguntas: [] }) si el material no tiene sentido pedagógico.',
+    },
+  );
 ```
 
 ## Error Handling Guidelines
-- Si el cliente no envía ni texto ni archivo, se responde `400 Bad Request`.
-- Si el archivo tiene un tipo MIME no soportado, se responde `400 Bad Request` indicando los formatos válidos.
+- Si el cliente no envía el archivo en `POST /api/v1/documentos/extraer-texto`, se responde `400 Bad Request`.
+- Si el archivo tiene un tipo MIME no soportado, se responde `400 Bad Request` indicando los formatos válidos (TXT, DOCX, PDF, JPG, PNG, WEBP).
+- Si el archivo supera el límite de tamaño (`MAX_UPLOAD_SIZE_MB`), se responde `400 Bad Request`.
+- Si el archivo procesado por IA no contiene texto identificable, se devuelve `textoExtraido: ''` con `requiereRevision: true` sin fabricar datos.
 - Si ambos proveedores de IA fallan o agotan su tiempo de espera, se lanza una excepción explícita con código `500` / `502`, evitando en todo momento la generación de datos simulados o ficticios.
+
