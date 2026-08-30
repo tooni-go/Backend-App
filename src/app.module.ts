@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
@@ -8,6 +8,7 @@ import { EntregasModule } from './entregas/entregas.module';
 import { AuthModule } from './auth/auth.module';
 import { AlumnosModule } from './alumnos/alumnos.module';
 import { ExamenesModule } from './examenes/examenes.module';
+import { ProfesorModule } from './profesor/profesor.module';
 
 @Module({
   imports: [
@@ -18,8 +19,10 @@ import { ExamenesModule } from './examenes/examenes.module';
     AuthModule,
     AlumnosModule,
     ExamenesModule,
+    ProfesorModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+
