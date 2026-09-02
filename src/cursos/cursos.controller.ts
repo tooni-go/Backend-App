@@ -118,9 +118,10 @@ export class CursosController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['titulo', 'preguntas'],
+      required: ['titulo', 'puntajeTotal', 'preguntas'],
       properties: {
         titulo: { type: 'string', example: 'Examen de Álgebra' },
+        puntajeTotal: { type: 'number', example: 10 },
         preguntas: {
           type: 'array',
           items: {
@@ -144,6 +145,7 @@ export class CursosController {
     @Param('id') cursoId: string,
     @Body() body: {
       titulo: string;
+      puntajeTotal: number;
       preguntas: Array<{
         enunciado: string;
         respuestaEsperada: string;
@@ -156,3 +158,4 @@ export class CursosController {
     return this.cursosService.createExamen(cursoId, body);
   }
 }
+

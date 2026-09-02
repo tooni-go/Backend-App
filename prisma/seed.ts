@@ -1,4 +1,4 @@
-import { PrismaClient } from '../generated/prisma/client.js';
+﻿import { PrismaClient } from '../generated/prisma/client.js';
 import { PrismaLibSql } from '@prisma/adapter-libsql';
 
 const adapter = new PrismaLibSql({
@@ -35,7 +35,7 @@ async function main() {
   console.log('Creando curso de prueba...');
   const curso = await prisma.curso.create({
     data: {
-      materia: 'Química Orgánica',
+      materia: 'QuÃ­mica OrgÃ¡nica',
       anio: 5,
       division: 'A',
       anioLectivo: 2026,
@@ -48,15 +48,15 @@ async function main() {
   const alumno1 = await prisma.alumno.create({
     data: {
       nombre: 'Mateo',
-      apellido: 'Fernández',
+      apellido: 'FernÃ¡ndez',
       legajo: 'L-50001',
     },
   });
 
   const alumno2 = await prisma.alumno.create({
     data: {
-      nombre: 'Sofía',
-      apellido: 'Rodríguez',
+      nombre: 'SofÃ­a',
+      apellido: 'RodrÃ­guez',
       legajo: 'L-50002',
     },
   });
@@ -64,7 +64,7 @@ async function main() {
   const alumno3 = await prisma.alumno.create({
     data: {
       nombre: 'Santiago',
-      apellido: 'Gómez',
+      apellido: 'GÃ³mez',
       legajo: 'L-50003',
     },
   });
@@ -84,28 +84,29 @@ async function main() {
     data: {
       titulo: 'Primer Parcial de Compuestos de Carbono',
       cursoId: curso.id,
+      puntajeTotal: 10.0,
       preguntas: {
         create: [
           {
-            enunciado: '¿Cuál es la fórmula química del benceno y describa su estructura molecular?',
-            respuestaEsperada: 'La fórmula del benceno es C6H6, estructurada en un anillo hexagonal plano con dobles enlaces conjugados resonantes.',
+            enunciado: 'Â¿CuÃ¡l es la fÃ³rmula quÃ­mica del benceno y describa su estructura molecular?',
+            respuestaEsperada: 'La fÃ³rmula del benceno es C6H6, estructurada en un anillo hexagonal plano con dobles enlaces conjugados resonantes.',
             puntajeMaximo: 5.0,
-            criteriosIA: 'Verificar mención a C6H6, anillo hexagonal y resonancia o hibridación sp2.',
+            criteriosIA: 'Verificar menciÃ³n a C6H6, anillo hexagonal y resonancia o hibridaciÃ³n sp2.',
             esEvaluacionVisual: false,
           },
           {
-            enunciado: 'Dibuje la estructura geométrica del isómero cis-2-buteno.',
+            enunciado: 'Dibuje la estructura geomÃ©trica del isÃ³mero cis-2-buteno.',
             respuestaEsperada: 'Estructura con los dos grupos metilo (-CH3) del mismo lado del doble enlace carbono-carbono.',
             puntajeMaximo: 5.0,
-            criteriosIA: 'Evaluar disposición espacial espacial de los metilos del mismo lado del doble enlace.',
-            esEvaluacionVisual: true, // Pregunta visual para gatillar revisión manual
+            criteriosIA: 'Evaluar disposiciÃ³n espacial espacial de los metilos del mismo lado del doble enlace.',
+            esEvaluacionVisual: true, // Pregunta visual para gatillar revisiÃ³n manual
           },
         ],
       },
     },
   });
 
-  console.log('Seeding completado de forma exitosa! 🎉');
+  console.log('Seeding completado de forma exitosa! ðŸŽ‰');
   console.log(`Profesor ID: ${profesor.id}`);
   console.log(`Curso ID: ${curso.id}`);
   console.log(`Examen ID: ${examen.id}`);
@@ -119,3 +120,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

@@ -1,7 +1,7 @@
 ﻿import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-export interface UpdateProfesorDto {
+export class UpdateProfesorDto {
   nombre?: string;
   apellido?: string;
   email?: string;
@@ -22,3 +22,4 @@ export class ProfesorService {
     });
   }
 }
+

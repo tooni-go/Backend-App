@@ -1,28 +1,29 @@
 ﻿import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-export interface CreateCursoDto {
+export class CreateCursoDto {
   materia: string;
   anio: number;
   division: string;
   anioLectivo: number;
 }
 
-export interface UpdateCursoDto {
+export class UpdateCursoDto {
   materia?: string;
   anio?: number;
   division?: string;
   anioLectivo?: number;
 }
 
-interface RegisterAlumnoDto {
+export class RegisterAlumnoDto {
   nombre: string;
   apellido: string;
   legajo: string;
 }
 
-interface CreateExamenDto {
+export class CreateExamenDto {
   titulo: string;
+  puntajeTotal: number;
   preguntas: Array<{
     enunciado: string;
     respuestaEsperada: string;
@@ -150,7 +151,7 @@ export class CursosService {
       where: { id: cursoId },
     });
     if (!curso) {
-      throw new NotFoundException(Curso con ID  + cursoId +  no encontrado.);
+      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
     }
 
     let alumno = await this.prisma.alumno.findUnique({
@@ -192,12 +193,13 @@ export class CursosService {
       where: { id: cursoId },
     });
     if (!curso) {
-      throw new NotFoundException(Curso con ID  + cursoId +  no encontrado.);
+      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
     }
 
     return this.prisma.examen.create({
       data: {
         titulo: dto.titulo,
+        puntajeTotal: dto.puntajeTotal,
         cursoId,
         preguntas: {
           create: dto.preguntas.map((p) => ({
@@ -215,3 +217,5 @@ export class CursosService {
     });
   }
 }
+
+
