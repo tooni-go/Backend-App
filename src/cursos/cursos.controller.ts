@@ -89,6 +89,11 @@ export class CursosController {
     return this.cursosService.deleteCurso(id, req.user.id);
   }
 
+  @Get(':id')
+  async getCurso(@Param('id') id: string) {
+    return this.cursosService.getCurso(id);
+  }
+
   @Post(':id/alumnos')
   @ApiOperation({ summary: 'Registrar un alumno y asociarlo al curso' })
   @ApiParam({ name: 'id', description: 'ID del curso' })
@@ -158,4 +163,6 @@ export class CursosController {
     return this.cursosService.createExamen(cursoId, body);
   }
 }
+
+
 

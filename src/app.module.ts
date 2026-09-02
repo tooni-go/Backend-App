@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { AlumnosModule } from './alumnos/alumnos.module';
 import { ExamenesModule } from './examenes/examenes.module';
 import { ProfesorModule } from './profesor/profesor.module';
+import { DocumentosModule } from './documentos/documentos.module';
 
 @Module({
   imports: [
@@ -20,9 +21,11 @@ import { ProfesorModule } from './profesor/profesor.module';
     AlumnosModule,
     ExamenesModule,
     ProfesorModule,
+    DocumentosModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+
 
