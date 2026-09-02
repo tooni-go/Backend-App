@@ -1,4 +1,4 @@
-﻿import { Controller, Put, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Put, Get, Body, UseGuards, Req } from '@nestjs/common';
 import { ProfesorService, UpdateProfesorDto } from './profesor.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
@@ -9,6 +9,13 @@ import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody } from '@nes
 @Controller('api/v1/profesor')
 export class ProfesorController {
   constructor(private readonly profesorService: ProfesorService) {}
+
+  @Get('me')
+  @ApiOperation({ summary: 'Obtener perfil del profesor autenticado' })
+  @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente.' })
+  async getProfile(@Req() req: any) {
+    return this.profesorService.getProfile(req.user.id);
+  }
 
   @Put('me')
   @ApiOperation({ summary: 'Actualizar perfil del profesor autenticado' })
