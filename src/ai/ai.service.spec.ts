@@ -6,7 +6,10 @@ import {
   GeneratedQuestionSchema,
 } from './ai.service';
 import { AiResilienceService } from './ai-resilience.service';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 
 jest.mock('@google/genai');
 
@@ -138,7 +141,8 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       preguntas: [
         {
           enunciado: 'Enuncie la segunda ley de Newton.',
-          respuestaEsperada: 'F = m * a (la fuerza neta es igual a la masa por la aceleración).',
+          respuestaEsperada:
+            'F = m * a (la fuerza neta es igual a la masa por la aceleración).',
           puntajeMaximo: 10,
           criteriosIA:
             'Exigir fórmula F=m*a, definición de variables y unidades del SI.',
@@ -252,7 +256,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
     it('activa fallback a OpenRouter si Gemini lanza un error de red o timeout', async () => {
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
-        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+        .mockRejectedValue(
+          new Error('Timeout de 30 segundos en Gemini API alcanzado'),
+        );
 
       const openRouterSpy = jest
         .spyOn(service as any, 'callOpenRouterForExamGeneration')
@@ -317,7 +323,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
-        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+        .mockRejectedValue(
+          new Error('Timeout de 30 segundos en Gemini API alcanzado'),
+        );
 
       jest
         .spyOn(service as any, 'callOpenRouterForExamGeneration')
@@ -341,15 +349,19 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
-        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+        .mockRejectedValue(
+          new Error('Timeout de 30 segundos en Gemini API alcanzado'),
+        );
 
       jest
         .spyOn(service as any, 'callOpenRouterForExamGeneration')
-        .mockRejectedValue(new Error('OpenRouter API respondió con estado 502: Bad Gateway'));
+        .mockRejectedValue(
+          new Error('OpenRouter API respondió con estado 502: Bad Gateway'),
+        );
 
-      await expect(
-        service.generateExam({ texto: 'Consigna' }),
-      ).rejects.toThrow(InternalServerErrorException);
+      await expect(service.generateExam({ texto: 'Consigna' })).rejects.toThrow(
+        InternalServerErrorException,
+      );
 
       expect(logFallbackSpy).toHaveBeenCalledTimes(2);
       expect(logFallbackSpy).toHaveBeenNthCalledWith(

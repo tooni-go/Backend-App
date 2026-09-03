@@ -4,7 +4,8 @@ export type FuenteTipo = 'txt' | 'docx' | 'pdf' | 'imagen';
 
 export class ExtraerTextoResponseDto {
   @ApiProperty({
-    description: 'Texto transcrito o extraído crudo del documento o imagen adjunta',
+    description:
+      'Texto transcrito o extraído crudo del documento o imagen adjunta',
     example: 'Examen de Matemática\n1. Resolver la ecuación cuadrática...',
   })
   textoExtraido: string;

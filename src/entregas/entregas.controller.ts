@@ -12,7 +12,14 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EntregasService } from './entregas.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiConsumes,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 import { MulterExceptionFilter } from '../common/filters/multer-exception.filter';
 
 const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
@@ -33,7 +40,10 @@ export class EntregasController {
       limits: { fileSize: MAX_UPLOAD_SIZE_BYTES },
     }),
   )
-  @ApiOperation({ summary: 'Subir archivo de entrega de examen e iniciar corrección por IA en segundo plano' })
+  @ApiOperation({
+    summary:
+      'Subir archivo de entrega de examen e iniciar corrección por IA en segundo plano',
+  })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -58,7 +68,8 @@ export class EntregasController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Entrega subida de forma exitosa y corrección iniciada en background.',
+    description:
+      'Entrega subida de forma exitosa y corrección iniciada en background.',
   })
   @ApiResponse({
     status: 404,
@@ -87,11 +98,14 @@ export class EntregasController {
    * Obtiene el detalle de una entrega específica con su estado y corrección.
    */
   @Get(':id')
-  @ApiOperation({ summary: 'Obtener los detalles, estado y corrección de una entrega' })
+  @ApiOperation({
+    summary: 'Obtener los detalles, estado y corrección de una entrega',
+  })
   @ApiParam({ name: 'id', description: 'ID único de la entrega' })
   @ApiResponse({
     status: 200,
-    description: 'Información de la entrega y su respectiva sugerencia de la IA.',
+    description:
+      'Información de la entrega y su respectiva sugerencia de la IA.',
   })
   @ApiResponse({
     status: 404,

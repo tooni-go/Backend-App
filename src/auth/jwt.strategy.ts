@@ -19,7 +19,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
 
     if (!profesor) {
-      throw new UnauthorizedException('El profesor asociado a este token ya no existe.');
+      throw new UnauthorizedException(
+        'El profesor asociado a este token ya no existe.',
+      );
     }
 
     return profesor; // Se inyecta automáticamente en req.user

@@ -27,7 +27,9 @@ export class AuthService {
 
       // Bypass en desarrollo local para poder probar en Swagger sin configurar credenciales reales de Google
       if (idToken === 'mock-token-juan' || idToken === 'default-google-id') {
-        this.logger.log('Bypass de Google OAuth activado con token de pruebas.');
+        this.logger.log(
+          'Bypass de Google OAuth activado con token de pruebas.',
+        );
         let profesor = await this.prisma.profesor.findUnique({
           where: { googleId: 'default-google-id' },
         });
@@ -61,7 +63,7 @@ export class AuthService {
           },
         };
       }
-      
+
       const ticket = await this.googleClient.verifyIdToken({
         idToken,
         audience: process.env.GOOGLE_CLIENT_ID,
@@ -69,16 +71,27 @@ export class AuthService {
 
       const payload = ticket.getPayload();
       if (!payload) {
-        throw new UnauthorizedException('Token de Google inválido (payload vacío).');
+        throw new UnauthorizedException(
+          'Token de Google inválido (payload vacío).',
+        );
       }
 
-      const { email, sub: googleId, given_name: nombre, family_name: apellido } = payload;
+      const {
+        email,
+        sub: googleId,
+        given_name: nombre,
+        family_name: apellido,
+      } = payload;
 
       if (!email || !googleId) {
-        throw new UnauthorizedException('El token de Google no contiene la información requerida.');
+        throw new UnauthorizedException(
+          'El token de Google no contiene la información requerida.',
+        );
       }
 
-      this.logger.log(`Google Token verificado correctamente para el email: ${email}`);
+      this.logger.log(
+        `Google Token verificado correctamente para el email: ${email}`,
+      );
 
       // Registrar o actualizar al profesor en la base de datos local (upsert)
       const profesor = await this.prisma.profesor.upsert({
@@ -96,7 +109,9 @@ export class AuthService {
         },
       });
 
-      this.logger.log(`Profesor ID ${profesor.id} resuelto correctamente en la base de datos.`);
+      this.logger.log(
+        `Profesor ID ${profesor.id} resuelto correctamente en la base de datos.`,
+      );
 
       // Generar JWT local de EvalIA
       const jwtPayload = {
@@ -118,8 +133,12 @@ export class AuthService {
         },
       };
     } catch (error) {
-      this.logger.error(`Error en la autenticación con Google: ${error.message}`);
-      throw new UnauthorizedException('No se pudo autenticar con Google. Token inválido o expirado.');
+      this.logger.error(
+        `Error en la autenticación con Google: ${error.message}`,
+      );
+      throw new UnauthorizedException(
+        'No se pudo autenticar con Google. Token inválido o expirado.',
+      );
     }
   }
 }

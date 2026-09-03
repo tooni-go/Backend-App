@@ -26,7 +26,9 @@ async function bootstrap() {
   // Resolver la carpeta de uploads de manera configurable y consistente entre dev y prod
   const customUploadsDir = process.env.UPLOADS_DIR;
   const uploadsDir = customUploadsDir
-    ? (customUploadsDir.startsWith('/') ? customUploadsDir : join(process.cwd(), customUploadsDir))
+    ? customUploadsDir.startsWith('/')
+      ? customUploadsDir
+      : join(process.cwd(), customUploadsDir)
     : join(process.cwd(), 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -63,6 +65,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger documentation is available at: http://localhost:${port}/api/docs`);
+  console.log(
+    `Swagger documentation is available at: http://localhost:${port}/api/docs`,
+  );
 }
 void bootstrap();

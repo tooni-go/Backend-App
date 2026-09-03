@@ -66,19 +66,21 @@ export class CursosService {
    */
   async createCurso(dto: CreateCursoDto, headerTeacherId?: string) {
     const profesorId = await this.resolveTeacherId(headerTeacherId);
-    return this.prisma.curso.create({
-      data: {
-        materia: dto.materia,
-        anio: 1, // Default for basic creation
-        division: 'A', // Default for basic creation
-        anioLectivo: new Date().getFullYear(),
-        profesorId,
-      },
-    }).then(curso => ({
-      id: curso.id,
-      nombre: dto.nombre,
-      materia: curso.materia
-    }));
+    return this.prisma.curso
+      .create({
+        data: {
+          materia: dto.materia,
+          anio: 1, // Default for basic creation
+          division: 'A', // Default for basic creation
+          anioLectivo: new Date().getFullYear(),
+          profesorId,
+        },
+      })
+      .then((curso) => ({
+        id: curso.id,
+        nombre: dto.nombre,
+        materia: curso.materia,
+      }));
   }
 
   /**
@@ -95,19 +97,19 @@ export class CursosService {
         },
       },
     });
-    
-    return cursos.map(c => ({
+
+    return cursos.map((c) => ({
       id: c.id,
       nombre: `${c.materia} ${c.anio}° ${c.division}`, // Or just some constructed string, openspec says nombre
       materia: c.materia,
       fechaCreacion: new Date().toISOString(), // Mocking as it's not in db
       alumnosCount: c._count.alumnos,
-      examenes: c.examenes.map(e => ({
+      examenes: c.examenes.map((e) => ({
         id: e.id,
         titulo: e.titulo,
         fecha: e.fecha,
         estado: 'ACTIVO', // Mocking as it's not in db
-      }))
+      })),
     }));
   }
 

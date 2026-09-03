@@ -10,9 +10,11 @@ describe('AlumnosService', () => {
   const mockPrismaService = {
     alumno: {
       count: jest.fn().mockResolvedValue(1),
-      findMany: jest.fn().mockResolvedValue([
-        { id: '1', nombre: 'Juan', apellido: 'Perez', legajo: '38123456' },
-      ]),
+      findMany: jest
+        .fn()
+        .mockResolvedValue([
+          { id: '1', nombre: 'Juan', apellido: 'Perez', legajo: '38123456' },
+        ]),
       findUnique: jest.fn(),
       create: jest.fn().mockResolvedValue({
         id: '1',
@@ -55,7 +57,9 @@ describe('AlumnosService', () => {
   describe('getAlumnos', () => {
     it('should return paginated list', async () => {
       const res = await service.getAlumnos('curso-1', 1, 10);
-      expect(res.data).toEqual([{ id: '1', nombre: 'Juan Perez', legajo: '38123456' }]);
+      expect(res.data).toEqual([
+        { id: '1', nombre: 'Juan Perez', legajo: '38123456' },
+      ]);
       expect(res.meta).toEqual({ total: 1, page: 1, limit: 10, totalPages: 1 });
     });
   });
@@ -69,12 +73,18 @@ describe('AlumnosService', () => {
         legajo: '38123456',
       });
       const res = await service.getAlumno('1');
-      expect(res).toEqual({ id: '1', nombre: 'Juan Perez', legajo: '38123456' });
+      expect(res).toEqual({
+        id: '1',
+        nombre: 'Juan Perez',
+        legajo: '38123456',
+      });
     });
 
     it('should throw NotFoundException if not found', async () => {
       mockPrismaService.alumno.findUnique.mockResolvedValueOnce(null);
-      await expect(service.getAlumno('non-existent')).rejects.toThrow(NotFoundException);
+      await expect(service.getAlumno('non-existent')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

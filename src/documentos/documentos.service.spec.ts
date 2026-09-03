@@ -75,7 +75,8 @@ describe('DocumentosService', () => {
 
   describe('TXT Extraction', () => {
     it('should extract text directly from buffer without invoking AI', async () => {
-      const content = 'Consignas del examen:\n1. Describir la fotosíntesis.\n2. Explicar el ciclo de Krebs.';
+      const content =
+        'Consignas del examen:\n1. Describir la fotosíntesis.\n2. Explicar el ciclo de Krebs.';
       const file = {
         mimetype: 'text/plain',
         buffer: Buffer.from(content, 'utf-8'),
@@ -158,7 +159,8 @@ describe('DocumentosService', () => {
 
   describe('PDF Extraction', () => {
     it('should call AiService to transcribe PDF and mark requiereRevision: true', async () => {
-      const pdfText = 'Temario de Física Cuántica\n1. Principio de Incertidumbre de Heisenberg.';
+      const pdfText =
+        'Temario de Física Cuántica\n1. Principio de Incertidumbre de Heisenberg.';
       mockAiService.extractTextFromDocument.mockResolvedValue(pdfText);
 
       const file = {

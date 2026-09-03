@@ -56,7 +56,9 @@ describe('AI Metrics Controller (HTTP)', () => {
         llamadasExitosas: 0,
         llamadasFallidas: 0,
       });
-      expect(new Date(response.body.ultimaActualizacion).getTime()).not.toBeNaN();
+      expect(
+        new Date(response.body.ultimaActualizacion).getTime(),
+      ).not.toBeNaN();
     });
 
     it('refleja llamadas exitosas y fallidas con actualización de timestamp', async () => {

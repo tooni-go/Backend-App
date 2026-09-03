@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
-import { AiResilienceService, FallbackEventDetails } from './ai-resilience.service';
+import {
+  AiResilienceService,
+  FallbackEventDetails,
+} from './ai-resilience.service';
 
 export const SUPPORTED_SUBMISSION_MIME_TYPES = [
   'image/jpeg',
@@ -141,7 +144,8 @@ export class AiService {
     try {
       responseText = await this.aiResilienceService.callWithFallback({
         context: 'evaluacion',
-        geminiCall: () => this.callGeminiWithTimeout(fileBase64, mimeType, prompt),
+        geminiCall: () =>
+          this.callGeminiWithTimeout(fileBase64, mimeType, prompt),
         openRouterCall: () => this.callOpenRouter(fileBase64, mimeType, prompt),
       });
     } catch (fallbackError: unknown) {
