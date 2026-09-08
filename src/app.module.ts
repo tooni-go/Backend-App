@@ -9,6 +9,7 @@ import { AuthModule } from './auth/auth.module';
 import { AlumnosModule } from './alumnos/alumnos.module';
 import { ExamenesModule } from './examenes/examenes.module';
 import { DocumentosModule } from './documentos/documentos.module';
+import { ReportesModule } from './reportes/reportes.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DocumentosModule } from './documentos/documentos.module';
     AlumnosModule,
     ExamenesModule,
     DocumentosModule,
+    ReportesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
