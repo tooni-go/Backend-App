@@ -55,6 +55,7 @@ model Examen {
   id        String     @id @default(uuid())
   titulo    String
   fecha     DateTime   @default(now())
+  puntajeTotal Float      @default(10)
   cursoId   String
   curso     Curso      @relation(fields: [cursoId], references: [id])
   preguntas Pregunta[]
@@ -64,7 +65,7 @@ model Examen {
 model Pregunta {
   id                 String  @id @default(uuid())
   examenId           String
-  examen             Examen  @relation(fields: [examenId], references: [id])
+  examen             Examen  @relation(fields: [examenId], references: [id], onDelete: Cascade)
   enunciado          String
   respuestaEsperada  String
   puntajeMaximo      Float
@@ -86,7 +87,7 @@ model Entrega {
 model Correccion {
   id              String    @id @default(uuid())
   entregaId       String    @unique
-  entrega         Entrega   @relation(fields: [entregaId], references: [id])
+  entrega         Entrega   @relation(fields: [entregaId], references: [id], onDelete: Cascade)
   notaIA          Float?
   notaFinal       Float?
   nivelConfianza  String?   // "BAJO", "MEDIO", "ALTO"
