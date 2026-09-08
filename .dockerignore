@@ -4,6 +4,11 @@ generated
 npm-debug.log
 .git
 .env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
 prisma/*.db
 prisma/*.db-journal
 uploads
@@ -11,3 +16,5 @@ Dockerfile
 .dockerignore
 .claude
 .windsurf
+.vscode
+.idea

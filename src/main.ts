@@ -7,8 +7,12 @@ import * as fs from 'fs';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { MulterExceptionFilter } from './common/filters/multer-exception.filter';
+import { validateEnvConfig } from './common/config/env.validator';
 
 async function bootstrap() {
+  // Validación preventiva y advertencias de variables de entorno al iniciar
+  validateEnvConfig();
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Registrar filtro global para errores de carga de archivos (Multer)
