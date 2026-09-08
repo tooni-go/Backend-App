@@ -7,6 +7,7 @@ import { CursosModule } from './cursos/cursos.module';
 import { EntregasModule } from './entregas/entregas.module';
 import { ExamenesModule } from './examenes/examenes.module';
 import { DocumentosModule } from './documentos/documentos.module';
+import { ReportesModule } from './reportes/reportes.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { DocumentosModule } from './documentos/documentos.module';
     EntregasModule,
     ExamenesModule,
     DocumentosModule,
+    ReportesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
