@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
+import { AiResilienceService, FallbackEventDetails } from './ai-resilience.service';
 
 export const SUPPORTED_SUBMISSION_MIME_TYPES = [
   'image/jpeg',
@@ -22,6 +23,14 @@ export const SUPPORTED_EXAM_GENERATION_MIME_TYPES = [
   'image/webp',
   'application/pdf',
   'text/plain',
+];
+
+export const SUPPORTED_EXTRACTION_AI_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
 ];
 
 export const AiQuestionEvaluationSchema = z.object({
@@ -46,16 +55,29 @@ export const GeneratedQuestionSchema = z.object({
     .min(1, 'La respuesta esperada no puede estar vacía'),
   puntajeMaximo: z
     .number()
-    .positive('El puntaje máximo debe ser un número positivo'),
+    .positive('El puntaje máximo debe ser un número positivo')
+    .min(1, 'El puntaje máximo por pregunta debe ser al menos 1')
+    .max(100, 'El puntaje máximo por pregunta no puede exceder 100'),
+  criteriosIA: z
+    .string()
+    .min(1, 'Los criterios de corrección por IA no pueden estar vacíos'),
   esEvaluacionVisual: z.boolean().default(false),
 });
 
-export const GeneratedExamSchema = z.object({
-  titulo: z.string().min(1, 'El título del examen no puede estar vacío'),
-  preguntas: z
-    .array(GeneratedQuestionSchema)
-    .min(1, 'Debe generarse al menos una pregunta'),
-});
+export const GeneratedExamSchema = z
+  .object({
+    titulo: z.string(),
+    preguntas: z.array(GeneratedQuestionSchema),
+  })
+  .refine(
+    (data) =>
+      (data.titulo === '' && data.preguntas.length === 0) ||
+      (data.titulo.trim().length > 0 && data.preguntas.length > 0),
+    {
+      message:
+        'El examen debe contener un título y al menos una pregunta válida, o bien ser un examen vacío ({ titulo: "", preguntas: [] }) si el material no tiene sentido pedagógico.',
+    },
+  );
 
 export type GeneratedExam = z.infer<typeof GeneratedExamSchema>;
 export type GeneratedQuestion = z.infer<typeof GeneratedQuestionSchema>;
@@ -79,8 +101,24 @@ export interface GenerateExamInput {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
 
+  constructor(private readonly aiResilienceService: AiResilienceService) {}
+
   /**
-   * Evalúa una entrega utilizando Gemini con fallback automático hacia OpenRouter.
+   * Retorna una copia de las métricas de uso acumuladas en memoria.
+   */
+  getMetrics() {
+    return this.aiResilienceService.getMetrics();
+  }
+
+  /**
+   * Emite un log estructurado con la información del evento de fallback (delegado a AiResilienceService).
+   */
+  private logFallbackEvent(params: FallbackEventDetails): void {
+    this.aiResilienceService.logFallbackEvent(params);
+  }
+
+  /**
+   * Evalúa una entrega utilizando Gemini con fallback automático hacia OpenRouter vía AiResilienceService.
    * Determina también el estado de la entrega en base a las reglas de negocio.
    */
   async evaluateSubmission(
@@ -100,39 +138,22 @@ export class AiService {
     const fileBase64 = fileBuffer.toString('base64');
     let responseText = '';
 
-    // 1. Intentar llamar a Gemini API (Proveedor principal)
     try {
-      this.logger.log('Iniciando evaluación con Gemini API...');
-      responseText = await this.callGeminiWithTimeout(
-        fileBase64,
-        mimeType,
-        prompt,
-      );
-      this.logger.log('Respuesta recibida exitosamente de Gemini.');
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.logger.error(
-        `Fallo en Gemini API: ${errorMessage}. Conmutando a OpenRouter...`,
-      );
-
-      // 2. Fallback a OpenRouter (Proveedor secundario)
-      try {
-        responseText = await this.callOpenRouter(fileBase64, mimeType, prompt);
-        this.logger.log('Respuesta recibida exitosamente de OpenRouter.');
-      } catch (fallbackError: unknown) {
-        const fbMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-        this.logger.error(
-          `Fallo también en el fallback de OpenRouter: ${fbMessage}`,
-        );
-        return { evaluation: null, finalState: 'REQUIERE_REVISION' };
-      }
+      responseText = await this.aiResilienceService.callWithFallback({
+        context: 'evaluacion',
+        geminiCall: () => this.callGeminiWithTimeout(fileBase64, mimeType, prompt),
+        openRouterCall: () => this.callOpenRouter(fileBase64, mimeType, prompt),
+      });
+    } catch (fallbackError: unknown) {
+      const msg =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
+      this.logger.error(`Error total en evaluación tras fallback: ${msg}`);
+      return { evaluation: null, finalState: 'REQUIERE_REVISION' };
     }
 
-    // 3. Procesar y Validar la respuesta JSON
+    // Procesar y Validar la respuesta JSON
     try {
       const cleanJson = this.cleanMarkdownJson(responseText);
       const parsedData: unknown = JSON.parse(cleanJson);
@@ -147,11 +168,8 @@ export class AiService {
 
       const evaluation = validation.data;
 
-      // 4. Determinar el estado en base a reglas de negocio
-      // Regla A: Si alguna pregunta requiere evaluación visual/gráfica, requiere revisión del docente.
+      // Determinar el estado en base a reglas de negocio
       const hasVisualQuestions = questions.some((q) => q.esEvaluacionVisual);
-
-      // Regla B: Si el nivel de confianza de la IA es bajo, requiere revisión.
       const isLowConfidence = evaluation.nivelConfianza === 'BAJO';
 
       let finalState = 'PENDIENTE_APROBACION';
@@ -179,7 +197,7 @@ export class AiService {
 
   /**
    * Genera un examen estructurado (Carga Inteligente) a partir de texto o archivo subido.
-   * Utiliza Gemini API como proveedor principal y OpenRouter como fallback.
+   * Utiliza Gemini API como proveedor principal y OpenRouter como fallback mediante AiResilienceService.
    */
   async generateExam(input: GenerateExamInput): Promise<GeneratedExam> {
     let rawText = input.texto?.trim() || '';
@@ -210,49 +228,114 @@ export class AiService {
     }
 
     const prompt = this.buildGenerateExamPrompt(rawText);
-    let responseText = '';
 
-    // 1. Intentar llamar a Gemini API (Proveedor principal)
     try {
-      this.logger.log(
-        'Iniciando Carga Inteligente de Examen con Gemini API...',
-      );
-      responseText = await this.callGeminiForExamGeneration(
-        prompt,
-        fileBase64,
-        mimeType,
-      );
-      this.logger.log('Examen generado exitosamente con Gemini.');
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      return await this.aiResilienceService.callWithFallback({
+        context: 'generacion',
+        geminiCall: async () => {
+          const geminiResponseText = await this.callGeminiForExamGeneration(
+            prompt,
+            fileBase64,
+            mimeType,
+          );
+          return this.parseAndValidateExamJson(geminiResponseText);
+        },
+        openRouterCall: async () => {
+          const openRouterResponseText =
+            await this.callOpenRouterForExamGeneration(
+              prompt,
+              fileBase64,
+              mimeType,
+            );
+          return this.parseAndValidateExamJson(openRouterResponseText);
+        },
+      });
+    } catch (fallbackError: unknown) {
+      const msg =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
       this.logger.error(
-        `Fallo en Gemini API durante generación de examen: ${errorMessage}. Conmutando a OpenRouter...`,
+        `Fallo completo en Carga Inteligente de Examen tras fallback: ${msg}`,
       );
+      throw new InternalServerErrorException(
+        'No fue posible generar el examen con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
+      );
+    }
+  }
 
-      // 2. Fallback a OpenRouter (Proveedor secundario)
-      try {
-        responseText = await this.callOpenRouterForExamGeneration(
-          prompt,
-          fileBase64,
-          mimeType,
-        );
-        this.logger.log('Examen generado exitosamente con OpenRouter.');
-      } catch (fallbackError: unknown) {
-        const fbMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-        this.logger.error(
-          `Fallo también en el fallback de OpenRouter para generación de examen: ${fbMessage}`,
-        );
-        throw new InternalServerErrorException(
-          'No fue posible generar el examen con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
-        );
-      }
+  /**
+   * Extrae y transcribe fielmente el texto contenido en una imagen o documento PDF utilizando IA.
+   * Utiliza Gemini como proveedor principal y OpenRouter como fallback mediante AiResilienceService.
+   */
+  async extractTextFromDocument(
+    fileBuffer: Buffer,
+    mimeType: string,
+  ): Promise<string> {
+    if (!SUPPORTED_EXTRACTION_AI_MIME_TYPES.includes(mimeType)) {
+      throw new BadRequestException(
+        `Tipo de archivo '${mimeType}' no soportado para extracción por IA. Formatos permitidos: JPG, PNG, WEBP, PDF.`,
+      );
     }
 
-    // 3. Procesar y Validar la respuesta JSON
+    const fileBase64 = fileBuffer.toString('base64');
+    const prompt = this.buildExtractTextPrompt();
+    let extractedText = '';
+
+    try {
+      extractedText = await this.aiResilienceService.callWithFallback({
+        context: 'extraccion',
+        geminiCall: () =>
+          this.invokeGemini({
+            prompt,
+            fileBase64,
+            mimeType,
+            jsonResponse: false,
+            allowEmpty: true,
+          }),
+        openRouterCall: () =>
+          this.invokeOpenRouter({
+            prompt,
+            fileBase64,
+            mimeType,
+            jsonResponse: false,
+            allowEmpty: true,
+            logLabel: 'extracción de texto',
+          }),
+      });
+    } catch (fallbackError: unknown) {
+      const msg =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
+      this.logger.error(
+        `Fallo completo en extracción de texto tras fallback: ${msg}`,
+      );
+      throw new InternalServerErrorException(
+        'No fue posible extraer el texto del documento con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
+      );
+    }
+
+    return (extractedText || '').trim();
+  }
+
+  /**
+   * Construye el prompt para la transcripción fiel de texto sin interpretaciones ni resúmenes.
+   */
+  private buildExtractTextPrompt(): string {
+    return `Actúa como un transcriptor y sistema OCR de alta precisión.
+Tu única tarea es transcribir exactamente todo el texto legible que aparece en el documento o imagen adjunta, respetando su redacción original, saltos de línea y estructura.
+
+REGLAS ESTRICTAS:
+1. No resumas, no interpretes, no agregues explicaciones, no corrijas errores ortográficos del original ni agregues introducciones o despedidas.
+2. Transcribe únicamente el texto tal cual está escrito en el archivo.
+3. Si el archivo está en blanco, es ilegible, borroso o no contiene ningún tipo de texto identificable, responde ÚNICAMENTE con una cadena vacía (sin texto de relleno ni aclaraciones).`;
+  }
+
+  /**
+   * Limpia, parsea y valida el JSON devuelto por los modelos de IA contra el esquema GeneratedExamSchema.
+   */
+  private parseAndValidateExamJson(responseText: string): GeneratedExam {
     try {
       const cleanJson = this.cleanMarkdownJson(responseText);
       const parsedData: unknown = JSON.parse(cleanJson);
@@ -262,24 +345,18 @@ export class AiService {
         this.logger.warn(
           `El examen generado por la IA no cumple con el esquema esperado: ${validation.error.message}`,
         );
-        throw new InternalServerErrorException(
-          'La IA generó una respuesta que no cumple con el formato estructurado del examen.',
+        throw new Error(
+          `El JSON generado no cumple con el esquema requerido: ${validation.error.message}`,
         );
       }
 
       return validation.data;
-    } catch (parseError: unknown) {
-      if (parseError instanceof InternalServerErrorException) {
-        throw parseError;
-      }
-      const parseMessage =
-        parseError instanceof Error ? parseError.message : String(parseError);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       this.logger.error(
-        `Error al parsear el JSON del examen generado: ${parseMessage}. Respuesta recibida:\n${responseText}`,
+        `Error al interpretar el JSON del examen: ${message}. Respuesta recibida:\n${responseText}`,
       );
-      throw new InternalServerErrorException(
-        'Error al interpretar la estructura del examen generado por la IA.',
-      );
+      throw new Error(`Error al interpretar el examen generado: ${message}`);
     }
   }
 
@@ -295,11 +372,13 @@ ${texto ? `CONTENIDO / CONSIGNAS PROVISTAS POR EL DOCENTE:\n"""\n${texto}\n"""\n
 REGLAS DE GENERACIÓN PEDAGÓGICA:
 1. "titulo": Asigna un título claro y representativo del tema evaluado (ej. "Evaluación de Álgebra y Funciones Polinómicas").
 2. "preguntas": Genera una lista de preguntas claras y no ambiguas basadas estrictamente en el material provisto o el tema solicitado.
-   Para cada pregunta debes definir:
+   Para cada pregunta debes definir obligatoriamente:
    - "enunciado": La consigna o pregunta formal que responderá el alumno.
    - "respuestaEsperada": La respuesta modelo correcta, desarrollo esperado, o criterios clave que deben estar presentes para considerar la respuesta correcta.
-   - "puntajeMaximo": Puntaje numérico asignado a la pregunta (ej. 2.5, 5, 10). La suma total de los puntajes debe totalizar una escala redonda (ej. 10 o 100 puntos).
+   - "puntajeMaximo": Puntaje numérico asignado a la pregunta (entre 1 y 100). La suma total de los puntajes debe totalizar una escala redonda (ej. 10 o 100 puntos).
+   - "criteriosIA": Descripción detallada de qué debe buscar el corrector (humano o IA) al evaluar esa respuesta — por ejemplo, qué conceptos clave indispensables deben estar presentes, qué errores comunes penalizar, o cómo repartir el puntaje si la respuesta es parcialmente correcta. No puede estar vacío.
    - "esEvaluacionVisual": Booleano (true o false). Marca 'true' ÚNICAMENTE si la resolución del alumno exige obligatoriamente un dibujo, gráfico de ejes cartesianos, diagrama de flujo, esquema anatómico o construcción geométrica que requiera inspección visual humana. En caso de respuestas puramente textuales, numéricas o de desarrollo algebraico, debe ser 'false'.
+3. Si el contenido provisto no tiene sentido pedagógico identificable (texto sin significado, caracteres aleatorios o material insuficiente), responde con un JSON vacío { "titulo": "", "preguntas": [] } en lugar de inventar un tema.
 
 REQUISITO ESTRICTO DE FORMATO:
 Debes responder EXCLUSIVAMENTE un objeto JSON válido con la estructura indicada a continuación. No incluyas bloques de formato markdown (\`\`\`json ... \`\`\`), ni introducciones, explicaciones, comentarios o saludos antes o después del JSON:
@@ -311,6 +390,7 @@ Debes responder EXCLUSIVAMENTE un objeto JSON válido con la estructura indicada
       "enunciado": "Consigna de la pregunta",
       "respuestaEsperada": "Respuesta modelo o criterios de resolución esperados",
       "puntajeMaximo": 5,
+      "criteriosIA": "Conceptos clave requeridos, penalizaciones por errores comunes y distribución de puntaje parcial.",
       "esEvaluacionVisual": false
     }
   ]
@@ -366,71 +446,15 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
   }
 
   /**
-   * Ejecuta la llamada a Gemini para corrección con un timeout de 15 segundos.
+   * Invoca a Gemini API con el prompt y archivo proporcionados.
    */
-  private async callGeminiWithTimeout(
-    fileBase64: string,
-    mimeType: string,
-    prompt: string,
-  ): Promise<string> {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('GEMINI_API_KEY no configurado en el entorno.');
-    }
-
-    if (!SUPPORTED_SUBMISSION_MIME_TYPES.includes(mimeType)) {
-      throw new Error(
-        `Tipo MIME no soportado: ${mimeType}. Formatos permitidos: JPG, PNG, WEBP, PDF.`,
-      );
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const modelName =
-      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
-
-    const filePart = {
-      inlineData: {
-        data: fileBase64,
-        mimeType: mimeType,
-      },
-    };
-
-    // Timeout Promise (30s)
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(new Error('Timeout de 30 segundos en Gemini API alcanzado')),
-        30000,
-      ),
-    );
-
-    // Call Promise
-    const apiCallPromise = (async () => {
-      const result = await ai.models.generateContent({
-        model: modelName,
-        contents: [filePart, prompt],
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-      const text = result.text;
-      if (!text) {
-        throw new Error('Respuesta vacía recibida de Gemini API.');
-      }
-      return text;
-    })();
-
-    return Promise.race([apiCallPromise, timeoutPromise]);
-  }
-
-  /**
-   * Ejecuta la llamada a Gemini para Carga Inteligente de Exámenes (texto o multimodal) con timeout de 15s.
-   */
-  private async callGeminiForExamGeneration(
-    prompt: string,
-    fileBase64?: string,
-    mimeType?: string,
-  ): Promise<string> {
+  private async invokeGeminiRaw(params: {
+    prompt: string;
+    fileBase64?: string;
+    mimeType?: string;
+    jsonResponse?: boolean;
+    allowEmpty?: boolean;
+  }): Promise<string> {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY no configurado en el entorno.');
@@ -444,118 +468,42 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       string | { inlineData: { data: string; mimeType: string } }
     > = [];
 
-    if (fileBase64 && mimeType) {
+    if (params.fileBase64 && params.mimeType) {
       contents.push({
         inlineData: {
-          data: fileBase64,
-          mimeType: mimeType,
+          data: params.fileBase64,
+          mimeType: params.mimeType,
         },
       });
     }
-    contents.push(prompt);
+    contents.push(params.prompt);
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(
-        () =>
-          reject(new Error('Timeout de 30 segundos en Gemini API alcanzado')),
-        30000,
-      ),
-    );
+    const result = await ai.models.generateContent({
+      model: modelName,
+      contents,
+      config: params.jsonResponse
+        ? { responseMimeType: 'application/json' }
+        : undefined,
+    });
 
-    const apiCallPromise = (async () => {
-      const result = await ai.models.generateContent({
-        model: modelName,
-        contents: contents,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-      const text = result.text;
-      if (!text) {
-        throw new Error('Respuesta vacía recibida de Gemini API.');
-      }
-      return text;
-    })();
-
-    return Promise.race([apiCallPromise, timeoutPromise]);
+    const text = result.text;
+    if (!text && !params.allowEmpty) {
+      throw new Error('Respuesta vacía recibida de Gemini API.');
+    }
+    return text || '';
   }
 
   /**
-   * Ejecuta la llamada de fallback a OpenRouter para corrección.
+   * Invoca a OpenRouter API con el prompt y archivo proporcionados.
    */
-  private async callOpenRouter(
-    fileBase64: string,
-    mimeType: string,
-    prompt: string,
-  ): Promise<string> {
-    const apiKey = process.env.OPENROUTER_API_KEY?.trim();
-    if (!apiKey) {
-      throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
-    }
-
-    const modelName =
-      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
-    this.logger.log(`Llamando a OpenRouter usando el modelo: ${modelName}...`);
-
-    const response = await fetch(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://evalia.com',
-          'X-Title': 'EvalIA',
-        },
-        body: JSON.stringify({
-          model: modelName,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: prompt,
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:${mimeType};base64,${fileBase64}`,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(
-        `OpenRouter API respondió con estado ${response.status}: ${errText}`,
-      );
-    }
-
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const text = data?.choices?.[0]?.message?.content;
-    if (!text) {
-      throw new Error('Respuesta vacía de OpenRouter API.');
-    }
-    return text;
-  }
-
-  /**
-   * Ejecuta la llamada de fallback a OpenRouter para Carga Inteligente de Exámenes.
-   */
-  private async callOpenRouterForExamGeneration(
-    prompt: string,
-    fileBase64?: string,
-    mimeType?: string,
-  ): Promise<string> {
+  private async invokeOpenRouterRaw(params: {
+    prompt: string;
+    fileBase64?: string;
+    mimeType?: string;
+    jsonResponse?: boolean;
+    allowEmpty?: boolean;
+    logLabel?: string;
+  }): Promise<string> {
     const apiKey = process.env.OPENROUTER_API_KEY?.trim();
     if (!apiKey) {
       throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
@@ -564,21 +512,34 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     const modelName =
       process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
     this.logger.log(
-      `Llamando a OpenRouter para generación de examen usando el modelo: ${modelName}...`,
+      `Llamando a OpenRouter${params.logLabel ? ` para ${params.logLabel}` : ''} usando el modelo: ${modelName}...`,
     );
 
     const contents: Array<
       | { type: 'text'; text: string }
       | { type: 'image_url'; image_url: { url: string } }
-    > = [{ type: 'text', text: prompt }];
+    > = [{ type: 'text', text: params.prompt }];
 
-    if (fileBase64 && mimeType) {
+    if (params.fileBase64 && params.mimeType) {
       contents.push({
         type: 'image_url',
         image_url: {
-          url: `data:${mimeType};base64,${fileBase64}`,
+          url: `data:${params.mimeType};base64,${params.fileBase64}`,
         },
       });
+    }
+
+    const body: Record<string, unknown> = {
+      model: modelName,
+      messages: [
+        {
+          role: 'user',
+          content: contents,
+        },
+      ],
+    };
+    if (params.jsonResponse) {
+      body.response_format = { type: 'json_object' };
     }
 
     const response = await fetch(
@@ -591,16 +552,7 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
           'HTTP-Referer': 'https://evalia.com',
           'X-Title': 'EvalIA',
         },
-        body: JSON.stringify({
-          model: modelName,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'user',
-              content: contents,
-            },
-          ],
-        }),
+        body: JSON.stringify(body),
       },
     );
 
@@ -615,10 +567,88 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       choices?: Array<{ message?: { content?: string } }>;
     };
     const text = data?.choices?.[0]?.message?.content;
-    if (!text) {
+    if (!text && !params.allowEmpty) {
       throw new Error('Respuesta vacía de OpenRouter API.');
     }
-    return text;
+    return text || '';
+  }
+
+  // --- Métodos de compatibilidad y adaptadores internos ---
+
+  private async callGeminiWithTimeout(
+    fileBase64: string,
+    mimeType: string,
+    prompt: string,
+  ): Promise<string> {
+    return this.invokeGeminiRaw({
+      prompt,
+      fileBase64,
+      mimeType,
+      jsonResponse: true,
+    });
+  }
+
+  private async callGeminiForExamGeneration(
+    prompt: string,
+    fileBase64?: string,
+    mimeType?: string,
+  ): Promise<string> {
+    return this.invokeGeminiRaw({
+      prompt,
+      fileBase64,
+      mimeType,
+      jsonResponse: true,
+    });
+  }
+
+  private async callOpenRouter(
+    fileBase64: string,
+    mimeType: string,
+    prompt: string,
+  ): Promise<string> {
+    return this.invokeOpenRouterRaw({
+      prompt,
+      fileBase64,
+      mimeType,
+      jsonResponse: true,
+      logLabel: 'evaluación de entrega',
+    });
+  }
+
+  private async callOpenRouterForExamGeneration(
+    prompt: string,
+    fileBase64?: string,
+    mimeType?: string,
+  ): Promise<string> {
+    return this.invokeOpenRouterRaw({
+      prompt,
+      fileBase64,
+      mimeType,
+      jsonResponse: true,
+      logLabel: 'generación de examen',
+    });
+  }
+
+  private async invokeGemini(params: {
+    prompt: string;
+    fileBase64?: string;
+    mimeType?: string;
+    jsonResponse?: boolean;
+    allowEmpty?: boolean;
+    timeoutErrorMessage?: string;
+  }): Promise<string> {
+    return this.invokeGeminiRaw(params);
+  }
+
+  private async invokeOpenRouter(params: {
+    prompt: string;
+    fileBase64?: string;
+    mimeType?: string;
+    jsonResponse?: boolean;
+    allowEmpty?: boolean;
+    logLabel?: string;
+  }): Promise<string> {
+    return this.invokeOpenRouterRaw(params);
   }
 
   /**

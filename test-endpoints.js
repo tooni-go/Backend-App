@@ -49,8 +49,73 @@ async function runTests() {
     const alumno = await alumnoRes.json();
     console.log('✅ Alumno registrado con éxito:', alumno);
 
-    // 4. Carga Inteligente de Examen con IA (POST /api/v1/examenes/generar)
-    console.log('\n4. Probando Carga Inteligente de Exámenes con IA (POST /api/v1/examenes/generar)...');
+    // 4. Extracción de Texto de Documentos (POST /api/v1/documentos/extraer-texto)
+    console.log('\n4. Probando Extracción de Texto de Documentos (POST /api/v1/documentos/extraer-texto)...');
+
+    // 4a. Extracción de archivo TXT
+    console.log('   4a. Extrayendo texto de archivo TXT plano...');
+    const docTxtContent = 'Consignas del Examen de Historia:\n1. Causas de la Revolución Francesa.\n2. Consecuencias de la Revolución Industrial.';
+    const docTxtBlob = new Blob([docTxtContent], { type: 'text/plain' });
+    const formDataTxt = new FormData();
+    formDataTxt.append('file', docTxtBlob, 'historia.txt');
+
+    const extraerTxtRes = await fetch(`${BACKEND_URL}/api/v1/documentos/extraer-texto`, {
+      method: 'POST',
+      body: formDataTxt,
+    });
+    if (!extraerTxtRes.ok) throw new Error(`Error en extracción TXT: ${await extraerTxtRes.text()}`);
+    const resultadoTxt = await extraerTxtRes.json();
+    console.log('   ✅ Extracción TXT exitosa:', resultadoTxt);
+
+    // 4b. Extracción de archivo DOCX
+    console.log('   4b. Extrayendo texto de archivo DOCX real...');
+    const JSZip = require('jszip');
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+    zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+    zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Examen de Química General</w:t></w:r></w:p><w:p><w:r><w:t>Pregunta 1: Balancear la ecuación redox.</w:t></w:r></w:p></w:body></w:document>`);
+    const docxNodeBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+    const docxBlob = new Blob([docxNodeBuffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    const formDataDocx = new FormData();
+    formDataDocx.append('file', docxBlob, 'examen.docx');
+
+    const extraerDocxRes = await fetch(`${BACKEND_URL}/api/v1/documentos/extraer-texto`, {
+      method: 'POST',
+      body: formDataDocx,
+    });
+    if (!extraerDocxRes.ok) throw new Error(`Error en extracción DOCX: ${await extraerDocxRes.text()}`);
+    const resultadoDocx = await extraerDocxRes.json();
+    console.log('   ✅ Extracción DOCX exitosa:', resultadoDocx);
+
+    // 4c. Validación de rechazo ante solicitud sin archivo (Error 400)
+    console.log('   4c. Verificando validación 400 ante solicitud sin archivo...');
+    const extraerSinArchivoRes = await fetch(`${BACKEND_URL}/api/v1/documentos/extraer-texto`, {
+      method: 'POST',
+      body: new FormData(),
+    });
+    if (extraerSinArchivoRes.status === 400) {
+      console.log('   ✅ Error 400 retornado correctamente ante solicitud sin archivo.');
+    } else {
+      throw new Error(`Se esperaba status 400 pero se recibió ${extraerSinArchivoRes.status}`);
+    }
+
+    // 4d. Validación de rechazo ante tipo MIME no soportado (Error 400)
+    console.log('   4d. Verificando validación 400 ante tipo MIME no soportado (audio/mp3)...');
+    const audioBlob = new Blob(['audio-content'], { type: 'audio/mp3' });
+    const formAudio = new FormData();
+    formAudio.append('file', audioBlob, 'audio.mp3');
+    const extraerAudioRes = await fetch(`${BACKEND_URL}/api/v1/documentos/extraer-texto`, {
+      method: 'POST',
+      body: formAudio,
+    });
+    if (extraerAudioRes.status === 400) {
+      console.log('   ✅ Error 400 retornado correctamente ante formato no soportado.');
+    } else {
+      throw new Error(`Se esperaba status 400 pero se recibió ${extraerAudioRes.status}`);
+    }
+
+    // 5. Carga Inteligente de Examen con IA (POST /api/v1/examenes/generar)
+    console.log('\n5. Probando Carga Inteligente de Exámenes con IA (POST /api/v1/examenes/generar)...');
     
     // 4a. Generación a partir de texto en JSON
     console.log('   4a. Generando examen a partir de consignas en JSON...');

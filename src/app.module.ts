@@ -1,11 +1,16 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { CursosModule } from './cursos/cursos.module';
 import { EntregasModule } from './entregas/entregas.module';
+import { AuthModule } from './auth/auth.module';
+import { AlumnosModule } from './alumnos/alumnos.module';
 import { ExamenesModule } from './examenes/examenes.module';
+import { ProfesorModule } from './profesor/profesor.module';
+import { DocumentosModule } from './documentos/documentos.module';
+import { ReportesModule } from './reportes/reportes.module';
 
 @Module({
   imports: [
@@ -13,9 +18,16 @@ import { ExamenesModule } from './examenes/examenes.module';
     PrismaModule,
     CursosModule,
     EntregasModule,
+    AuthModule,
+    AlumnosModule,
     ExamenesModule,
+    ProfesorModule,
+    DocumentosModule,
+    ReportesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
+
+
