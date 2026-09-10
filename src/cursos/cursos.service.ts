@@ -1,4 +1,8 @@
-﻿import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export class CreateCursoDto {
@@ -93,20 +97,20 @@ export class CursosService {
         },
       },
     });
-    
-    return cursos.map(c => ({
+
+    return cursos.map((c) => ({
       id: c.id,
       materia: c.materia,
       anio: c.anio,
       division: c.division,
       anioLectivo: c.anioLectivo,
       alumnosCount: c._count.alumnos,
-      examenes: c.examenes.map(e => ({
+      examenes: c.examenes.map((e) => ({
         id: e.id,
         titulo: e.titulo,
         fecha: e.fecha,
         estado: 'ACTIVO',
-      }))
+      })),
     }));
   }
 
@@ -117,7 +121,8 @@ export class CursosService {
     const profesorId = await this.resolveTeacherId(headerTeacherId);
     const curso = await this.prisma.curso.findUnique({ where: { id } });
     if (!curso) throw new NotFoundException('Curso no encontrado');
-    if (curso.profesorId !== profesorId) throw new ForbiddenException('No tienes permiso para editar este curso');
+    if (curso.profesorId !== profesorId)
+      throw new ForbiddenException('No tienes permiso para editar este curso');
 
     return this.prisma.curso.update({
       where: { id },
@@ -126,7 +131,7 @@ export class CursosService {
         ...(dto.anio && { anio: dto.anio }),
         ...(dto.division && { division: dto.division }),
         ...(dto.anioLectivo && { anioLectivo: dto.anioLectivo }),
-      }
+      },
     });
   }
 
@@ -137,7 +142,10 @@ export class CursosService {
     const profesorId = await this.resolveTeacherId(headerTeacherId);
     const curso = await this.prisma.curso.findUnique({ where: { id } });
     if (!curso) throw new NotFoundException('Curso no encontrado');
-    if (curso.profesorId !== profesorId) throw new ForbiddenException('No tienes permiso para eliminar este curso');
+    if (curso.profesorId !== profesorId)
+      throw new ForbiddenException(
+        'No tienes permiso para eliminar este curso',
+      );
 
     await this.prisma.curso.delete({ where: { id } });
     return { success: true };
@@ -242,9 +250,3 @@ export class CursosService {
     });
   }
 }
-
-
-
-
-
-

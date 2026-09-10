@@ -9,9 +9,20 @@
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { CursosService, CreateCursoDto, UpdateCursoDto } from './cursos.service';
+import {
+  CursosService,
+  CreateCursoDto,
+  UpdateCursoDto,
+} from './cursos.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 
 @ApiTags('Cursos')
 @ApiBearerAuth('JWT-auth')
@@ -21,7 +32,9 @@ export class CursosController {
   constructor(private readonly cursosService: CursosService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Crear un nuevo curso asociado al profesor autenticado' })
+  @ApiOperation({
+    summary: 'Crear un nuevo curso asociado al profesor autenticado',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -35,17 +48,22 @@ export class CursosController {
     },
   })
   @ApiResponse({ status: 201, description: 'Curso creado exitosamente.' })
-  @ApiResponse({ status: 401, description: 'No autorizado (token JWT faltante o expirado).' })
-  async createCurso(
-    @Body() body: CreateCursoDto,
-    @Req() req: any,
-  ) {
+  @ApiResponse({
+    status: 401,
+    description: 'No autorizado (token JWT faltante o expirado).',
+  })
+  async createCurso(@Body() body: CreateCursoDto, @Req() req: any) {
     return this.cursosService.createCurso(body, req.user.id);
   }
 
   @Get()
-  @ApiOperation({ summary: 'Obtener todos los cursos vinculados al profesor autenticado' })
-  @ApiResponse({ status: 200, description: 'Lista de cursos retornada con éxito.' })
+  @ApiOperation({
+    summary: 'Obtener todos los cursos vinculados al profesor autenticado',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lista de cursos retornada con éxito.',
+  })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
   async getCursos(@Req() req: any) {
     return this.cursosService.getCursos(req.user.id);
@@ -82,10 +100,7 @@ export class CursosController {
   @ApiResponse({ status: 200, description: 'Curso eliminado exitosamente.' })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
   @ApiResponse({ status: 403, description: 'No tienes permiso.' })
-  async deleteCurso(
-    @Param('id') id: string,
-    @Req() req: any,
-  ) {
+  async deleteCurso(@Param('id') id: string, @Req() req: any) {
     return this.cursosService.deleteCurso(id, req.user.id);
   }
 
@@ -108,7 +123,10 @@ export class CursosController {
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'Alumno registrado e inscrito exitosamente.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Alumno registrado e inscrito exitosamente.',
+  })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
   async registerStudent(
     @Param('id') cursoId: string,
@@ -136,19 +154,31 @@ export class CursosController {
               enunciado: { type: 'string', example: '¿Cuánto es 2 + 2?' },
               respuestaEsperada: { type: 'string', example: '4' },
               puntajeMaximo: { type: 'number', example: 5 },
-              criteriosIA: { type: 'string', example: 'Explicación detallada', nullable: true },
-              esEvaluacionVisual: { type: 'boolean', example: false, default: false },
+              criteriosIA: {
+                type: 'string',
+                example: 'Explicación detallada',
+                nullable: true,
+              },
+              esEvaluacionVisual: {
+                type: 'boolean',
+                example: false,
+                default: false,
+              },
             },
           },
         },
       },
     },
   })
-  @ApiResponse({ status: 201, description: 'Examen y preguntas creados exitosamente.' })
+  @ApiResponse({
+    status: 201,
+    description: 'Examen y preguntas creados exitosamente.',
+  })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
   async createExam(
     @Param('id') cursoId: string,
-    @Body() body: {
+    @Body()
+    body: {
       titulo: string;
       puntajeTotal: number;
       preguntas: Array<{
@@ -163,6 +193,3 @@ export class CursosController {
     return this.cursosService.createExamen(cursoId, body);
   }
 }
-
-
-

@@ -29,5 +29,3 @@ import { ReportesModule } from './reportes/reportes.module';
   providers: [AppService],
 })
 export class AppModule {}
-
-

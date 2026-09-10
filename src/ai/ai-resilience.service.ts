@@ -222,7 +222,9 @@ export class AiResilienceService {
       timerId = setTimeout(() => {
         const seconds = Math.round(timeoutMs / 1000);
         reject(
-          new Error(`Timeout de ${seconds} segundos en ${operationLabel} alcanzado`),
+          new Error(
+            `Timeout de ${seconds} segundos en ${operationLabel} alcanzado`,
+          ),
         );
       }, timeoutMs);
     });
@@ -288,7 +290,9 @@ export class AiResilienceService {
 
     // 1. Intentar proveedor principal: Gemini API
     try {
-      this.logger.log(`[${context}] Iniciando llamada a Gemini API (proveedor principal)...`);
+      this.logger.log(
+        `[${context}] Iniciando llamada a Gemini API (proveedor principal)...`,
+      );
       const result = await this.executeWithTimeout(
         geminiCall,
         timeoutMs,
@@ -296,7 +300,9 @@ export class AiResilienceService {
       );
       this.geminiSuccesses++;
       this.lastUpdated = new Date();
-      this.logger.log(`[${context}] Respuesta recibida exitosamente de Gemini.`);
+      this.logger.log(
+        `[${context}] Respuesta recibida exitosamente de Gemini.`,
+      );
       return result;
     } catch (geminiError: unknown) {
       this.geminiFailures++;
@@ -326,7 +332,9 @@ export class AiResilienceService {
         );
         this.openRouterSuccesses++;
         this.lastUpdated = new Date();
-        this.logger.log(`[${context}] Respuesta recibida exitosamente de OpenRouter.`);
+        this.logger.log(
+          `[${context}] Respuesta recibida exitosamente de OpenRouter.`,
+        );
         return openRouterResult;
       } catch (openRouterError: unknown) {
         this.openRouterFailures++;

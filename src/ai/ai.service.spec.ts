@@ -6,7 +6,10 @@ import {
   GeneratedQuestionSchema,
 } from './ai.service';
 import { AiResilienceService } from './ai-resilience.service';
-import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 
 jest.mock('@google/genai');
 
@@ -138,7 +141,8 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       preguntas: [
         {
           enunciado: 'Enuncie la segunda ley de Newton.',
-          respuestaEsperada: 'F = m * a (la fuerza neta es igual a la masa por la aceleración).',
+          respuestaEsperada:
+            'F = m * a (la fuerza neta es igual a la masa por la aceleración).',
           puntajeMaximo: 10,
           criteriosIA:
             'Exigir fórmula F=m*a, definición de variables y unidades del SI.',
@@ -252,7 +256,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
     it('activa fallback a OpenRouter si Gemini lanza un error de red o timeout', async () => {
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
-        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+        .mockRejectedValue(
+          new Error('Timeout de 30 segundos en Gemini API alcanzado'),
+        );
 
       const openRouterSpy = jest
         .spyOn(service as any, 'callOpenRouterForExamGeneration')
@@ -317,7 +323,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
-        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+        .mockRejectedValue(
+          new Error('Timeout de 30 segundos en Gemini API alcanzado'),
+        );
 
       jest
         .spyOn(service as any, 'callOpenRouterForExamGeneration')
@@ -341,15 +349,19 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
       jest
         .spyOn(service as any, 'callGeminiForExamGeneration')
-        .mockRejectedValue(new Error('Timeout de 30 segundos en Gemini API alcanzado'));
+        .mockRejectedValue(
+          new Error('Timeout de 30 segundos en Gemini API alcanzado'),
+        );
 
       jest
         .spyOn(service as any, 'callOpenRouterForExamGeneration')
-        .mockRejectedValue(new Error('OpenRouter API respondió con estado 502: Bad Gateway'));
+        .mockRejectedValue(
+          new Error('OpenRouter API respondió con estado 502: Bad Gateway'),
+        );
 
-      await expect(
-        service.generateExam({ texto: 'Consigna' }),
-      ).rejects.toThrow(InternalServerErrorException);
+      await expect(service.generateExam({ texto: 'Consigna' })).rejects.toThrow(
+        InternalServerErrorException,
+      );
 
       expect(logFallbackSpy).toHaveBeenCalledTimes(2);
       expect(logFallbackSpy).toHaveBeenNthCalledWith(
@@ -451,7 +463,8 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       } finally {
         if (originalKey !== undefined) process.env.GEMINI_API_KEY = originalKey;
         else delete process.env.GEMINI_API_KEY;
-        if (originalModel !== undefined) process.env.GEMINI_MODEL = originalModel;
+        if (originalModel !== undefined)
+          process.env.GEMINI_MODEL = originalModel;
         else delete process.env.GEMINI_MODEL;
       }
     });
@@ -471,7 +484,8 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       } finally {
         if (originalKey !== undefined) process.env.GEMINI_API_KEY = originalKey;
         else delete process.env.GEMINI_API_KEY;
-        if (originalModel !== undefined) process.env.GEMINI_MODEL = originalModel;
+        if (originalModel !== undefined)
+          process.env.GEMINI_MODEL = originalModel;
         else delete process.env.GEMINI_MODEL;
       }
     });
@@ -554,9 +568,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       // Cambiar dinámicamente el modelo a Claude 3.5 Sonnet
       service.setActiveOpenRouterModel('anthropic/claude-3.5-sonnet');
 
-      const mockGenerateContent = jest.fn().mockRejectedValue(
-        new Error('Gemini Unavailable'),
-      );
+      const mockGenerateContent = jest
+        .fn()
+        .mockRejectedValue(new Error('Gemini Unavailable'));
 
       (GoogleGenAI as unknown as jest.Mock).mockImplementation(() => ({
         models: {
@@ -579,15 +593,19 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
       let capturedRequestBody: any = null;
       const originalFetch = global.fetch;
-      global.fetch = jest.fn().mockImplementation(async (url: string, init: any) => {
-        capturedRequestBody = JSON.parse(init.body);
-        return {
-          ok: true,
-          json: async () => ({
-            choices: [{ message: { content: JSON.stringify(mockExamResponse) } }],
-          }),
-        };
-      }) as any;
+      global.fetch = jest
+        .fn()
+        .mockImplementation(async (url: string, init: any) => {
+          capturedRequestBody = JSON.parse(init.body);
+          return {
+            ok: true,
+            json: async () => ({
+              choices: [
+                { message: { content: JSON.stringify(mockExamResponse) } },
+              ],
+            }),
+          };
+        }) as any;
 
       try {
         await service.generateExam({ texto: 'Generar examen con fallback' });
@@ -637,4 +655,3 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
     });
   });
 });
-

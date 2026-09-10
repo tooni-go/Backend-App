@@ -43,7 +43,7 @@ export function buildReportFilename(
 ): string {
   const cleanMateria = sanitizeFilenamePart(materia) || 'materia';
   const cleanDivision = sanitizeFilenamePart(division) || 'div';
-  
+
   let dateStr = '';
   if (fecha instanceof Date) {
     dateStr = fecha.toISOString().split('T')[0];
@@ -136,8 +136,7 @@ export class ReportesService {
 
     const filas: ExamenReportRow[] = examen.entregas.map((entrega) => {
       const estaPublicado =
-        entrega.estado === 'PUBLICADO' &&
-        entrega.correccion?.notaFinal != null;
+        entrega.estado === 'PUBLICADO' && entrega.correccion?.notaFinal != null;
 
       const notaFinal = estaPublicado
         ? (entrega.correccion!.notaFinal as number)
@@ -224,7 +223,9 @@ export class ReportesService {
       const notasPublicadas: number[] = [];
 
       for (const examen of curso.examenes) {
-        const entrega = examen.entregas.find((ent) => ent.alumnoId === alumno.id);
+        const entrega = examen.entregas.find(
+          (ent) => ent.alumnoId === alumno.id,
+        );
 
         if (
           entrega &&
@@ -243,7 +244,9 @@ export class ReportesService {
       if (notasPublicadas.length > 0) {
         const suma = notasPublicadas.reduce((acc, curr) => acc + curr, 0);
         const rawAvg = suma / notasPublicadas.length;
-        promedio = Number.isInteger(rawAvg) ? rawAvg : Number(rawAvg.toFixed(2));
+        promedio = Number.isInteger(rawAvg)
+          ? rawAvg
+          : Number(rawAvg.toFixed(2));
       }
 
       return {
@@ -271,7 +274,9 @@ export class ReportesService {
   /**
    * Genera el contenido del CSV para un examen con BOM UTF-8 y la directiva sep=,
    */
-  async generateExamenCsv(examenId: string): Promise<{ filename: string; content: string }> {
+  async generateExamenCsv(
+    examenId: string,
+  ): Promise<{ filename: string; content: string }> {
     const data = await this.getExamenReportData(examenId);
     const filename = buildReportFilename(
       data.examen.curso.materia,
@@ -310,7 +315,9 @@ export class ReportesService {
   /**
    * Genera el contenido del CSV para un curso con BOM UTF-8 y la directiva sep=,
    */
-  async generateCursoCsv(cursoId: string): Promise<{ filename: string; content: string }> {
+  async generateCursoCsv(
+    cursoId: string,
+  ): Promise<{ filename: string; content: string }> {
     const data = await this.getCursoReportData(cursoId);
     const filename = buildReportFilename(
       data.curso.materia,
@@ -344,7 +351,9 @@ export class ReportesService {
   /**
    * Genera un PDF tabular y formateado para las calificaciones de un examen.
    */
-  async generateExamenPdf(examenId: string): Promise<{ filename: string; buffer: Buffer }> {
+  async generateExamenPdf(
+    examenId: string,
+  ): Promise<{ filename: string; buffer: Buffer }> {
     const data = await this.getExamenReportData(examenId);
     const filename = buildReportFilename(
       data.examen.curso.materia,
@@ -383,7 +392,13 @@ export class ReportesService {
         .moveDown(1);
 
       // Tabla
-      const headers = ['Legajo', 'Nombre y Apellido', 'Nota Final', 'Confianza IA', 'Fecha Aprob.'];
+      const headers = [
+        'Legajo',
+        'Nombre y Apellido',
+        'Nota Final',
+        'Confianza IA',
+        'Fecha Aprob.',
+      ];
       const columnWidths = [135, 155, 80, 80, 65]; // total = 515 — legajo ancho para no cortar
       const startX = 40;
       let currentY = doc.y;
@@ -395,7 +410,10 @@ export class ReportesService {
 
         let xOffset = startX + 5;
         headers.forEach((header, index) => {
-          doc.text(header, xOffset, y + 5, { width: columnWidths[index], align: 'left' });
+          doc.text(header, xOffset, y + 5, {
+            width: columnWidths[index],
+            align: 'left',
+          });
           xOffset += columnWidths[index];
         });
         return y + 22;
@@ -408,7 +426,11 @@ export class ReportesService {
           .moveDown(1)
           .fillColor('#64748B')
           .fontSize(10)
-          .text('No hay entregas registradas para este examen.', startX, currentY + 10);
+          .text(
+            'No hay entregas registradas para este examen.',
+            startX,
+            currentY + 10,
+          );
       } else {
         data.filas.forEach((fila, index) => {
           // Salto de página si nos acercamos al margen inferior
@@ -428,7 +450,9 @@ export class ReportesService {
           const rowValues = [
             fila.legajo,
             `${fila.apellido}, ${fila.nombre}`,
-            typeof fila.notaFinal === 'number' ? fila.notaFinal.toString() : fila.notaFinal,
+            typeof fila.notaFinal === 'number'
+              ? fila.notaFinal.toString()
+              : fila.notaFinal,
             fila.nivelConfianza,
             fila.fechaAprobacion,
           ];
@@ -454,7 +478,9 @@ export class ReportesService {
   /**
    * Genera un PDF tabular y formateado para las calificaciones consolidadas de un curso.
    */
-  async generateCursoPdf(cursoId: string): Promise<{ filename: string; buffer: Buffer }> {
+  async generateCursoPdf(
+    cursoId: string,
+  ): Promise<{ filename: string; buffer: Buffer }> {
     const data = await this.getCursoReportData(cursoId);
     const filename = buildReportFilename(
       data.curso.materia,
@@ -465,7 +491,11 @@ export class ReportesService {
 
     const buffer = await new Promise<Buffer>((resolve, reject) => {
       // Usar Landscape (apaisado) para permitir más columnas de exámenes
-      const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
+      const doc = new PDFDocument({
+        margin: 40,
+        size: 'A4',
+        layout: 'landscape',
+      });
       const chunks: Buffer[] = [];
 
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -476,7 +506,9 @@ export class ReportesService {
       doc
         .fontSize(18)
         .fillColor('#1E293B')
-        .text('EvalIA - Planilla Consolidada de Calificaciones', { align: 'left' })
+        .text('EvalIA - Planilla Consolidada de Calificaciones', {
+          align: 'left',
+        })
         .moveDown(0.3);
 
       doc
@@ -496,14 +528,18 @@ export class ReportesService {
       const legajoWidth = 140;
       const nombreWidth = 140;
       const promedioWidth = 70;
-      const remainingWidth = totalWidth - legajoWidth - nombreWidth - promedioWidth;
+      const remainingWidth =
+        totalWidth - legajoWidth - nombreWidth - promedioWidth;
       const examCount = data.examenes.length;
-      const examColWidth = examCount > 0 ? Math.max(50, remainingWidth / examCount) : 0;
+      const examColWidth =
+        examCount > 0 ? Math.max(50, remainingWidth / examCount) : 0;
 
       const headers = [
         'Legajo',
         'Alumno',
-        ...data.examenes.map((e) => (e.titulo.length > 15 ? e.titulo.substring(0, 13) + '...' : e.titulo)),
+        ...data.examenes.map((e) =>
+          e.titulo.length > 15 ? e.titulo.substring(0, 13) + '...' : e.titulo,
+        ),
         'Promedio',
       ];
 
@@ -522,7 +558,10 @@ export class ReportesService {
 
         let xOffset = startX + 5;
         headers.forEach((header, index) => {
-          doc.text(header, xOffset, y + 5, { width: columnWidths[index], align: 'left' });
+          doc.text(header, xOffset, y + 5, {
+            width: columnWidths[index],
+            align: 'left',
+          });
           xOffset += columnWidths[index];
         });
         return y + 22;
@@ -535,7 +574,11 @@ export class ReportesService {
           .moveDown(1)
           .fillColor('#64748B')
           .fontSize(10)
-          .text('No hay alumnos registrados en este curso.', startX, currentY + 10);
+          .text(
+            'No hay alumnos registrados en este curso.',
+            startX,
+            currentY + 10,
+          );
       } else {
         data.filas.forEach((fila, index) => {
           if (currentY > doc.page.height - 50) {
@@ -558,7 +601,9 @@ export class ReportesService {
               const val = fila.notasPorExamen[e.id];
               return typeof val === 'number' ? val.toString() : val;
             }),
-            typeof fila.promedio === 'number' ? fila.promedio.toString() : fila.promedio,
+            typeof fila.promedio === 'number'
+              ? fila.promedio.toString()
+              : fila.promedio,
           ];
 
           rowValues.forEach((val, colIdx) => {

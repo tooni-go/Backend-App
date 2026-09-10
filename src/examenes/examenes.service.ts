@@ -59,7 +59,8 @@ export class ExamenesService {
 
   async updateExamen(id: string, dto: UpdateExamenDto) {
     const examen = await this.prisma.examen.findUnique({ where: { id } });
-    if (!examen) throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    if (!examen)
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
 
     return this.prisma.$transaction(async (tx) => {
       await tx.pregunta.deleteMany({
@@ -87,7 +88,8 @@ export class ExamenesService {
 
   async deleteExamen(id: string) {
     const examen = await this.prisma.examen.findUnique({ where: { id } });
-    if (!examen) throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    if (!examen)
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
 
     await this.prisma.examen.delete({
       where: { id },
@@ -100,7 +102,8 @@ export class ExamenesService {
       where: { id },
       include: { preguntas: true },
     });
-    if (!examen) throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    if (!examen)
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
 
     const newCursoId = cursoDestinoId || examen.cursoId;
 

@@ -59,7 +59,8 @@ describe('POST /api/v1/documentos/extraer-texto (HTTP)', () => {
   });
 
   it('extracts text from a real DOCX with mammoth without calling AI', async () => {
-    const expected = 'Examen de Historia\nPregunta 1: Explique las causas de la Revolucion de Mayo.';
+    const expected =
+      'Examen de Historia\nPregunta 1: Explique las causas de la Revolucion de Mayo.';
     const docxBuffer = createMinimalDocxBuffer(expected);
 
     const response = await request(app.getHttpServer())

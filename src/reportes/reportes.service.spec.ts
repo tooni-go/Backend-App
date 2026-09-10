@@ -50,7 +50,9 @@ describe('ReportesService', () => {
         '2026-09-01',
         'csv',
       );
-      expect(filenameCsv).toBe('notas-matematica-aplicada-division-a-2026-09-01.csv');
+      expect(filenameCsv).toBe(
+        'notas-matematica-aplicada-division-a-2026-09-01.csv',
+      );
 
       const filenamePdf = buildReportFilename(
         'Matemática Aplicada',
@@ -58,7 +60,9 @@ describe('ReportesService', () => {
         new Date('2026-09-01T00:00:00Z'),
         'pdf',
       );
-      expect(filenamePdf).toBe('notas-matematica-aplicada-division-a-2026-09-01.pdf');
+      expect(filenamePdf).toBe(
+        'notas-matematica-aplicada-division-a-2026-09-01.pdf',
+      );
     });
 
     it('maneja valores con eñes, caracteres especiales o vacíos', () => {
@@ -85,7 +89,12 @@ describe('ReportesService', () => {
         {
           id: 'ent-1',
           estado: 'PUBLICADO',
-          alumno: { id: 'a1', legajo: 'L-101', nombre: 'Juan', apellido: 'Pérez' },
+          alumno: {
+            id: 'a1',
+            legajo: 'L-101',
+            nombre: 'Juan',
+            apellido: 'Pérez',
+          },
           correccion: {
             notaFinal: 8.5,
             nivelConfianza: 'ALTO',
@@ -95,13 +104,23 @@ describe('ReportesService', () => {
         {
           id: 'ent-2',
           estado: 'PENDIENTE',
-          alumno: { id: 'a2', legajo: 'L-102', nombre: 'Ana', apellido: 'Gómez' },
+          alumno: {
+            id: 'a2',
+            legajo: 'L-102',
+            nombre: 'Ana',
+            apellido: 'Gómez',
+          },
           correccion: null,
         },
         {
           id: 'ent-3',
           estado: 'REQUIERE_REVISION',
-          alumno: { id: 'a3', legajo: 'L-103', nombre: 'Carlos', apellido: 'López' },
+          alumno: {
+            id: 'a3',
+            legajo: 'L-103',
+            nombre: 'Carlos',
+            apellido: 'López',
+          },
           correccion: {
             notaFinal: null,
             nivelConfianza: 'BAJO',
@@ -143,12 +162,18 @@ describe('ReportesService', () => {
 
       const { filename, content } = await service.generateExamenCsv('exam-1');
 
-      expect(filename).toBe('notas-matematica-aplicada-division-a-2026-09-01.csv');
+      expect(filename).toBe(
+        'notas-matematica-aplicada-division-a-2026-09-01.csv',
+      );
       // Debe comenzar estrictamente con \uFEFFsep=,\n
       expect(content.startsWith('\uFEFFsep=,\n')).toBe(true);
-      expect(content).toContain('Legajo,Nombre,Apellido,Nota Final,Nivel Confianza,Fecha Aprobacion');
+      expect(content).toContain(
+        'Legajo,Nombre,Apellido,Nota Final,Nivel Confianza,Fecha Aprobacion',
+      );
       expect(content).toContain('L-101,Juan,Perez,8.5,ALTO,2026-09-02');
-      expect(content).toContain('L-102,Ana,Gomez,Sin publicar,Sin datos,Sin publicar');
+      expect(content).toContain(
+        'L-102,Ana,Gomez,Sin publicar,Sin datos,Sin publicar',
+      );
     });
 
     it('genera PDF binario para examen sin errores', async () => {
@@ -156,7 +181,9 @@ describe('ReportesService', () => {
 
       const { filename, buffer } = await service.generateExamenPdf('exam-1');
 
-      expect(filename).toBe('notas-matematica-aplicada-division-a-2026-09-01.pdf');
+      expect(filename).toBe(
+        'notas-matematica-aplicada-division-a-2026-09-01.pdf',
+      );
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBeGreaterThan(0);
       expect(buffer.toString('utf-8', 0, 4)).toBe('%PDF');
@@ -236,13 +263,28 @@ describe('ReportesService', () => {
       ],
       alumnos: [
         {
-          alumno: { id: 'a1', legajo: 'L-101', nombre: 'Juan', apellido: 'Pérez' },
+          alumno: {
+            id: 'a1',
+            legajo: 'L-101',
+            nombre: 'Juan',
+            apellido: 'Pérez',
+          },
         },
         {
-          alumno: { id: 'a2', legajo: 'L-102', nombre: 'Ana', apellido: 'Gómez' },
+          alumno: {
+            id: 'a2',
+            legajo: 'L-102',
+            nombre: 'Ana',
+            apellido: 'Gómez',
+          },
         },
         {
-          alumno: { id: 'a3', legajo: 'L-103', nombre: 'Carlos', apellido: 'López' },
+          alumno: {
+            id: 'a3',
+            legajo: 'L-103',
+            nombre: 'Carlos',
+            apellido: 'López',
+          },
         },
       ],
     };
@@ -280,9 +322,13 @@ describe('ReportesService', () => {
       const { content } = await service.generateCursoCsv('curso-1');
 
       expect(content.startsWith('\uFEFFsep=,\n')).toBe(true);
-      expect(content).toContain('Legajo,Nombre,Apellido,Parcial 1,Parcial 2,Promedio');
+      expect(content).toContain(
+        'Legajo,Nombre,Apellido,Parcial 1,Parcial 2,Promedio',
+      );
       expect(content).toContain('L-101,Juan,Perez,8,10,9');
-      expect(content).toContain('L-102,Ana,Gomez,Sin publicar,Sin publicar,Sin datos');
+      expect(content).toContain(
+        'L-102,Ana,Gomez,Sin publicar,Sin publicar,Sin datos',
+      );
       expect(content).toContain('L-103,Carlos,Lopez,Sin publicar,7.5,7.5');
     });
 
@@ -291,7 +337,9 @@ describe('ReportesService', () => {
 
       const { filename, buffer } = await service.generateCursoPdf('curso-1');
 
-      expect(filename.startsWith('notas-matematica-aplicada-division-a-')).toBe(true);
+      expect(filename.startsWith('notas-matematica-aplicada-division-a-')).toBe(
+        true,
+      );
       expect(filename.endsWith('.pdf')).toBe(true);
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBeGreaterThan(0);

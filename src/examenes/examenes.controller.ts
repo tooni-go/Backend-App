@@ -12,7 +12,13 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService, UpdateExamenDto } from './examenes.service';
 import { GeneratedExam } from '../ai/ai.service';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+  ApiParam,
+} from '@nestjs/swagger';
 
 @ApiTags('Exámenes')
 @Controller('api/v1/examenes')
@@ -20,7 +26,9 @@ export class ExamenesController {
   constructor(private readonly examenesService: ExamenesService) {}
 
   @Post('generar')
-  @ApiOperation({ summary: 'Generar examen con IA a partir de texto o archivo' })
+  @ApiOperation({
+    summary: 'Generar examen con IA a partir de texto o archivo',
+  })
   @UseInterceptors(FileInterceptor('file'))
   async generateExam(
     @UploadedFile() file?: Express.Multer.File,
@@ -45,7 +53,9 @@ export class ExamenesController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Eliminar un examen y sus preguntas/entregas en cascada' })
+  @ApiOperation({
+    summary: 'Eliminar un examen y sus preguntas/entregas en cascada',
+  })
   @ApiParam({ name: 'id', description: 'ID del examen' })
   async deleteExamen(@Param('id') id: string) {
     return this.examenesService.deleteExamen(id);
@@ -54,8 +64,18 @@ export class ExamenesController {
   @Post(':id/duplicar')
   @ApiOperation({ summary: 'Duplicar un examen' })
   @ApiParam({ name: 'id', description: 'ID del examen a duplicar' })
-  @ApiBody({ schema: { type: 'object', properties: { cursoDestinoId: { type: 'string', example: 'uuid', nullable: true } } } })
-  async duplicateExamen(@Param('id') id: string, @Body() body: { cursoDestinoId?: string }) {
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        cursoDestinoId: { type: 'string', example: 'uuid', nullable: true },
+      },
+    },
+  })
+  async duplicateExamen(
+    @Param('id') id: string,
+    @Body() body: { cursoDestinoId?: string },
+  ) {
     return this.examenesService.duplicateExamen(id, body.cursoDestinoId);
   }
 }

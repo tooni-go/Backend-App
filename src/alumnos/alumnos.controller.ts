@@ -1,7 +1,23 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AlumnosService } from './alumnos.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { CreateAlumnoDto, UpdateAlumnoDto } from './dto/alumno.dto';
 
 @ApiTags('Alumnos')
@@ -22,7 +38,11 @@ export class AlumnosController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
   ) {
-    return this.alumnosService.getAlumnos(cursoId, parseInt(page, 10), parseInt(limit, 10));
+    return this.alumnosService.getAlumnos(
+      cursoId,
+      parseInt(page, 10),
+      parseInt(limit, 10),
+    );
   }
 
   @Get(':id')

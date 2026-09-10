@@ -7,8 +7,12 @@ import * as fs from 'fs';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { MulterExceptionFilter } from './common/filters/multer-exception.filter';
+import { validateEnvConfig } from './common/config/env.validator';
 
 async function bootstrap() {
+  // Validación preventiva y advertencias de variables de entorno al iniciar
+  validateEnvConfig();
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Registrar filtro global para errores de carga de archivos (Multer)
@@ -26,7 +30,9 @@ async function bootstrap() {
   // Resolver la carpeta de uploads de manera configurable y consistente entre dev y prod
   const customUploadsDir = process.env.UPLOADS_DIR;
   const uploadsDir = customUploadsDir
-    ? (customUploadsDir.startsWith('/') ? customUploadsDir : join(process.cwd(), customUploadsDir))
+    ? customUploadsDir.startsWith('/')
+      ? customUploadsDir
+      : join(process.cwd(), customUploadsDir)
     : join(process.cwd(), 'uploads');
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
@@ -63,6 +69,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
   console.log(`Application is running on: http://localhost:${port}`);
-  console.log(`Swagger documentation is available at: http://localhost:${port}/api/docs`);
+  console.log(
+    `Swagger documentation is available at: http://localhost:${port}/api/docs`,
+  );
 }
 void bootstrap();

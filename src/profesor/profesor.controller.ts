@@ -1,7 +1,13 @@
 import { Controller, Put, Get, Body, UseGuards, Req } from '@nestjs/common';
 import { ProfesorService, UpdateProfesorDto } from './profesor.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiBody,
+} from '@nestjs/swagger';
 
 @ApiTags('Profesor')
 @ApiBearerAuth('JWT-auth')
@@ -31,10 +37,7 @@ export class ProfesorController {
   })
   @ApiResponse({ status: 200, description: 'Perfil actualizado exitosamente.' })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
-  async updateProfile(
-    @Body() body: UpdateProfesorDto,
-    @Req() req: any,
-  ) {
+  async updateProfile(@Body() body: UpdateProfesorDto, @Req() req: any) {
     return this.profesorService.updateProfile(req.user.id, body);
   }
 }

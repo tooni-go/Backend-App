@@ -42,15 +42,21 @@ export class EntregasService {
   ) {
     // 1. Validaciones previas de entrada y archivo
     if (!examId) {
-      throw new BadRequestException('Debe especificar el ID del examen (examId).');
+      throw new BadRequestException(
+        'Debe especificar el ID del examen (examId).',
+      );
     }
 
     if (!alumnoId) {
-      throw new BadRequestException('Debe especificar el ID del alumno (alumnoId).');
+      throw new BadRequestException(
+        'Debe especificar el ID del alumno (alumnoId).',
+      );
     }
 
     if (!file || !file.buffer) {
-      throw new BadRequestException('Debe proporcionar un archivo para la entrega.');
+      throw new BadRequestException(
+        'Debe proporcionar un archivo para la entrega.',
+      );
     }
 
     // 2. Validación de tipo MIME soportado
@@ -61,7 +67,10 @@ export class EntregasService {
     }
 
     // 3. Validación de tamaño máximo permitido
-    const maxUploadSizeMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
+    const maxUploadSizeMb = parseInt(
+      process.env.MAX_UPLOAD_SIZE_MB || '10',
+      10,
+    );
     const maxUploadSizeBytes = maxUploadSizeMb * 1024 * 1024;
     if (file.size && file.size > maxUploadSizeBytes) {
       throw new BadRequestException(
@@ -85,7 +94,9 @@ export class EntregasService {
     }
 
     // 5. Generar un nombre único para el archivo y guardarlo en el path resuelto
-    const extension = file.originalname ? file.originalname.split('.').pop() : 'bin';
+    const extension = file.originalname
+      ? file.originalname.split('.').pop()
+      : 'bin';
     const uniqueFilename = `${Date.now()}-${randomUUID()}.${extension}`;
     const uploadsDir = this.getUploadsDir();
 

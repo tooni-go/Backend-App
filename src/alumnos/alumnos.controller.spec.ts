@@ -61,7 +61,11 @@ describe('AlumnosController', () => {
   });
 
   it('should create an alumno', async () => {
-    const dto = { nombre: 'Juan Perez', legajo: '38123456', cursoId: 'curso-1' };
+    const dto = {
+      nombre: 'Juan Perez',
+      legajo: '38123456',
+      cursoId: 'curso-1',
+    };
     const res = await controller.createAlumno(dto);
     expect(service.createAlumno).toHaveBeenCalledWith(dto);
     expect(res.nombre).toBe('Juan Perez');

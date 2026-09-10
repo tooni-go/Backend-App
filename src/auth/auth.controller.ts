@@ -9,7 +9,9 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Iniciar sesión o registrar profesor mediante Google ID Token' })
+  @ApiOperation({
+    summary: 'Iniciar sesión o registrar profesor mediante Google ID Token',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -17,7 +19,8 @@ export class AuthController {
       properties: {
         token: {
           type: 'string',
-          description: 'Token ID recibido de Google tras el flujo OAuth del frontend',
+          description:
+            'Token ID recibido de Google tras el flujo OAuth del frontend',
         },
       },
     },

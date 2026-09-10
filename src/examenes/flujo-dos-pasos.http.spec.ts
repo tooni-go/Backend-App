@@ -17,7 +17,8 @@ describe('Flujo de Dos Pasos: Extracción y Generación de Examen (HTTP)', () =>
     titulo: 'Examen de Historia Argentina',
     preguntas: [
       {
-        enunciado: '¿Cuáles fueron las causas principales de la Revolución de Mayo?',
+        enunciado:
+          '¿Cuáles fueron las causas principales de la Revolución de Mayo?',
         respuestaEsperada:
           'La crisis de la monarquía española tras las invasiones napoleónicas, los antecedentes de las invasiones inglesas y el anhelo criollo de autogobierno.',
         puntajeMaximo: 5,

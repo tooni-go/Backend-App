@@ -7,7 +7,7 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     // TEMPORAL: Bypassing auth for frontend development MVP.
     // Inyectamos un usuario por defecto en el request
     const request = context.switchToHttp().getRequest();
-    request.user = { id: 'user-dev-id' }; 
+    request.user = { id: 'user-dev-id' };
     return true;
   }
 }
