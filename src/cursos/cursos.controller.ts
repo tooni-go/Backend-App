@@ -1,13 +1,19 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Body,
   Param,
   UseGuards,
   Req,
 } from '@nestjs/common';
-import { CursosService } from './cursos.service';
+import {
+  CursosService,
+  CreateCursoDto,
+  UpdateCursoDto,
+} from './cursos.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   ApiTags,
@@ -32,10 +38,12 @@ export class CursosController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['nombre', 'materia'],
+      required: ['materia', 'anio', 'division', 'anioLectivo'],
       properties: {
-        nombre: { type: 'string', example: 'Matemática 5° A' },
         materia: { type: 'string', example: 'Matemática' },
+        anio: { type: 'number', example: 5 },
+        division: { type: 'string', example: 'A' },
+        anioLectivo: { type: 'number', example: 2026 },
       },
     },
   })
@@ -44,10 +52,7 @@ export class CursosController {
     status: 401,
     description: 'No autorizado (token JWT faltante o expirado).',
   })
-  async createCurso(
-    @Body() body: { nombre: string; materia: string },
-    @Req() req: any,
-  ) {
+  async createCurso(@Body() body: CreateCursoDto, @Req() req: any) {
     return this.cursosService.createCurso(body, req.user.id);
   }
 
@@ -62,6 +67,41 @@ export class CursosController {
   @ApiResponse({ status: 401, description: 'No autorizado.' })
   async getCursos(@Req() req: any) {
     return this.cursosService.getCursos(req.user.id);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Actualizar un curso' })
+  @ApiParam({ name: 'id', description: 'ID del curso' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        materia: { type: 'string', example: 'Matemática Avanzada' },
+        anio: { type: 'number', example: 6 },
+        division: { type: 'string', example: 'B' },
+        anioLectivo: { type: 'number', example: 2027 },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Curso actualizado exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
+  @ApiResponse({ status: 403, description: 'No tienes permiso.' })
+  async updateCurso(
+    @Param('id') id: string,
+    @Body() body: UpdateCursoDto,
+    @Req() req: any,
+  ) {
+    return this.cursosService.updateCurso(id, body, req.user.id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Eliminar un curso' })
+  @ApiParam({ name: 'id', description: 'ID del curso' })
+  @ApiResponse({ status: 200, description: 'Curso eliminado exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
+  @ApiResponse({ status: 403, description: 'No tienes permiso.' })
+  async deleteCurso(@Param('id') id: string, @Req() req: any) {
+    return this.cursosService.deleteCurso(id, req.user.id);
   }
 
   @Get(':id')
@@ -101,9 +141,10 @@ export class CursosController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['titulo', 'preguntas'],
+      required: ['titulo', 'puntajeTotal', 'preguntas'],
       properties: {
         titulo: { type: 'string', example: 'Examen de Álgebra' },
+        puntajeTotal: { type: 'number', example: 10 },
         preguntas: {
           type: 'array',
           items: {
@@ -139,6 +180,7 @@ export class CursosController {
     @Body()
     body: {
       titulo: string;
+      puntajeTotal: number;
       preguntas: Array<{
         enunciado: string;
         respuestaEsperada: string;

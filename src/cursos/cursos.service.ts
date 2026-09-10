@@ -1,19 +1,33 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface CreateCursoDto {
-  nombre: string;
+export class CreateCursoDto {
   materia: string;
+  anio: number;
+  division: string;
+  anioLectivo: number;
 }
 
-interface RegisterAlumnoDto {
+export class UpdateCursoDto {
+  materia?: string;
+  anio?: number;
+  division?: string;
+  anioLectivo?: number;
+}
+
+export class RegisterAlumnoDto {
   nombre: string;
   apellido: string;
   legajo: string;
 }
 
-interface CreateExamenDto {
+export class CreateExamenDto {
   titulo: string;
+  puntajeTotal: number;
   preguntas: Array<{
     enunciado: string;
     respuestaEsperada: string;
@@ -28,9 +42,17 @@ export class CursosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Obtiene o crea un profesor por defecto para simplificar las pruebas locales del MVP.
+   * Resuelve el ID del profesor o usa uno por defecto (para MVP local).
    */
-  async getOrCreateDefaultTeacher() {
+  async resolveTeacherId(headerTeacherId?: string): Promise<string> {
+    if (headerTeacherId) {
+      const teacher = await this.prisma.profesor.findUnique({
+        where: { id: headerTeacherId },
+      });
+      if (teacher) {
+        return teacher.id;
+      }
+    }
     let teacher = await this.prisma.profesor.findFirst();
     if (!teacher) {
       teacher = await this.prisma.profesor.create({
@@ -42,23 +64,7 @@ export class CursosService {
         },
       });
     }
-    return teacher;
-  }
-
-  /**
-   * Resuelve el ID del profesor basándose en el header x-teacher-id o usando el profesor default.
-   */
-  async resolveTeacherId(headerTeacherId?: string): Promise<string> {
-    if (headerTeacherId) {
-      const teacher = await this.prisma.profesor.findUnique({
-        where: { id: headerTeacherId },
-      });
-      if (teacher) {
-        return teacher.id;
-      }
-    }
-    const defaultTeacher = await this.getOrCreateDefaultTeacher();
-    return defaultTeacher.id;
+    return teacher.id;
   }
 
   /**
@@ -66,21 +72,15 @@ export class CursosService {
    */
   async createCurso(dto: CreateCursoDto, headerTeacherId?: string) {
     const profesorId = await this.resolveTeacherId(headerTeacherId);
-    return this.prisma.curso
-      .create({
-        data: {
-          materia: dto.materia,
-          anio: 1, // Default for basic creation
-          division: 'A', // Default for basic creation
-          anioLectivo: new Date().getFullYear(),
-          profesorId,
-        },
-      })
-      .then((curso) => ({
-        id: curso.id,
-        nombre: dto.nombre,
-        materia: curso.materia,
-      }));
+    return this.prisma.curso.create({
+      data: {
+        materia: dto.materia,
+        anio: dto.anio,
+        division: dto.division,
+        anioLectivo: dto.anioLectivo,
+        profesorId,
+      },
+    });
   }
 
   /**
@@ -100,17 +100,55 @@ export class CursosService {
 
     return cursos.map((c) => ({
       id: c.id,
-      nombre: `${c.materia} ${c.anio}° ${c.division}`, // Or just some constructed string, openspec says nombre
       materia: c.materia,
-      fechaCreacion: new Date().toISOString(), // Mocking as it's not in db
+      anio: c.anio,
+      division: c.division,
+      anioLectivo: c.anioLectivo,
       alumnosCount: c._count.alumnos,
       examenes: c.examenes.map((e) => ({
         id: e.id,
         titulo: e.titulo,
         fecha: e.fecha,
-        estado: 'ACTIVO', // Mocking as it's not in db
+        estado: 'ACTIVO',
       })),
     }));
+  }
+
+  /**
+   * Actualiza un curso existente.
+   */
+  async updateCurso(id: string, dto: UpdateCursoDto, headerTeacherId?: string) {
+    const profesorId = await this.resolveTeacherId(headerTeacherId);
+    const curso = await this.prisma.curso.findUnique({ where: { id } });
+    if (!curso) throw new NotFoundException('Curso no encontrado');
+    if (curso.profesorId !== profesorId)
+      throw new ForbiddenException('No tienes permiso para editar este curso');
+
+    return this.prisma.curso.update({
+      where: { id },
+      data: {
+        ...(dto.materia && { materia: dto.materia }),
+        ...(dto.anio && { anio: dto.anio }),
+        ...(dto.division && { division: dto.division }),
+        ...(dto.anioLectivo && { anioLectivo: dto.anioLectivo }),
+      },
+    });
+  }
+
+  /**
+   * Elimina un curso.
+   */
+  async deleteCurso(id: string, headerTeacherId?: string) {
+    const profesorId = await this.resolveTeacherId(headerTeacherId);
+    const curso = await this.prisma.curso.findUnique({ where: { id } });
+    if (!curso) throw new NotFoundException('Curso no encontrado');
+    if (curso.profesorId !== profesorId)
+      throw new ForbiddenException(
+        'No tienes permiso para eliminar este curso',
+      );
+
+    await this.prisma.curso.delete({ where: { id } });
+    return { success: true };
   }
 
   /**
@@ -149,7 +187,6 @@ export class CursosService {
       throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
     }
 
-    // Buscamos si el alumno ya existe por legajo, o lo creamos
     let alumno = await this.prisma.alumno.findUnique({
       where: { legajo: dto.legajo },
     });
@@ -164,7 +201,6 @@ export class CursosService {
       });
     }
 
-    // Asociamos el alumno al curso mediante upsert en AlumnoCurso (join table explícita)
     await this.prisma.alumnoCurso.upsert({
       where: {
         alumnoId_cursoId: {
@@ -196,6 +232,7 @@ export class CursosService {
     return this.prisma.examen.create({
       data: {
         titulo: dto.titulo,
+        puntajeTotal: dto.puntajeTotal,
         cursoId,
         preguntas: {
           create: dto.preguntas.map((p) => ({

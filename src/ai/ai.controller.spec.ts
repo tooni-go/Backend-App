@@ -104,4 +104,116 @@ describe('AI Metrics Controller (HTTP)', () => {
       );
     });
   });
+
+  describe('GET /api/v1/ai/model y GET /api/v1/ai/config', () => {
+    it('GET /api/v1/ai/model devuelve status 200 con modeloActivo, origen, catálogo homologado y geminiPrincipal', async () => {
+      process.env.GEMINI_API_KEY = 'test-gemini-key';
+      process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/ai/model')
+        .expect(200);
+
+      expect(response.body).toHaveProperty('modeloActivo');
+      expect(response.body).toHaveProperty('origen');
+      expect(response.body).toHaveProperty('modelosDisponibles');
+      expect(response.body).toHaveProperty('geminiPrincipal');
+      expect(Array.isArray(response.body.modelosDisponibles)).toBe(true);
+      expect(response.body.modelosDisponibles.length).toBeGreaterThan(0);
+
+      expect(response.body.geminiPrincipal).toEqual({
+        modelo: 'gemini-2.5-flash',
+        configurado: true,
+      });
+
+      const primerModelo = response.body.modelosDisponibles[0];
+      expect(primerModelo).toHaveProperty('id');
+      expect(primerModelo).toHaveProperty('nombre');
+      expect(primerModelo).toHaveProperty('proveedor');
+      expect(primerModelo).toHaveProperty('descripcion');
+      expect(primerModelo).toHaveProperty('esMultimodal');
+      expect(typeof primerModelo.esMultimodal).toBe('boolean');
+    });
+
+    it('devuelve geminiPrincipal.configurado: false si GEMINI_API_KEY no está configurada o está vacía', async () => {
+      const originalKey = process.env.GEMINI_API_KEY;
+      try {
+        delete process.env.GEMINI_API_KEY;
+        const responseNoKey = await request(app.getHttpServer())
+          .get('/api/v1/ai/model')
+          .expect(200);
+
+        expect(responseNoKey.body.geminiPrincipal.configurado).toBe(false);
+
+        process.env.GEMINI_API_KEY = '   ';
+        const responseEmptyKey = await request(app.getHttpServer())
+          .get('/api/v1/ai/model')
+          .expect(200);
+
+        expect(responseEmptyKey.body.geminiPrincipal.configurado).toBe(false);
+      } finally {
+        if (originalKey !== undefined) {
+          process.env.GEMINI_API_KEY = originalKey;
+        } else {
+          delete process.env.GEMINI_API_KEY;
+        }
+      }
+    });
+
+    it('GET /api/v1/ai/config devuelve status 200 con la misma estructura (alias)', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/ai/config')
+        .expect(200);
+
+      expect(response.body).toHaveProperty('modeloActivo');
+      expect(response.body).toHaveProperty('modelosDisponibles');
+      expect(response.body).toHaveProperty('geminiPrincipal');
+    });
+  });
+
+  describe('PATCH /api/v1/ai/model', () => {
+    it('actualiza el modelo con éxito cuando se envía un modelo homologado válido', async () => {
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/ai/model')
+        .send({ modelo: 'anthropic/claude-3.5-sonnet' })
+        .expect(200);
+
+      expect(response.body.modeloActivo).toBe('anthropic/claude-3.5-sonnet');
+      expect(response.body.origen).toBe('memoria');
+
+      // Verificar que un GET subsiguiente refleje el cambio
+      const getResponse = await request(app.getHttpServer())
+        .get('/api/v1/ai/model')
+        .expect(200);
+
+      expect(getResponse.body.modeloActivo).toBe('anthropic/claude-3.5-sonnet');
+      expect(getResponse.body.origen).toBe('memoria');
+    });
+
+    it('devuelve 400 Bad Request cuando el modelo no pertenece al catálogo homologado', async () => {
+      const response = await request(app.getHttpServer())
+        .patch('/api/v1/ai/model')
+        .send({ modelo: 'modelo-inexistente/gpt-99' })
+        .expect(400);
+
+      expect(response.body.message).toContain('no está dentro del catálogo');
+    });
+
+    it('devuelve 400 Bad Request cuando el body está vacío o el campo modelo no es string válido', async () => {
+      await request(app.getHttpServer())
+        .patch('/api/v1/ai/model')
+        .send({})
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/ai/model')
+        .send({ modelo: '' })
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .patch('/api/v1/ai/model')
+        .send({ modelo: '   ' })
+        .expect(400);
+    });
+  });
 });

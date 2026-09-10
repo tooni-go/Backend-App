@@ -25,6 +25,7 @@ export interface FallbackEventDetails {
   tipoFallo?: AiErrorType;
   causa?: string;
   proveedorActivado: 'openrouter' | 'ninguno';
+  modeloOpenRouter?: string;
 }
 
 export interface AiMetricsDetails {
@@ -43,6 +44,7 @@ export interface CallWithFallbackOptions<T> {
   geminiCall: () => Promise<T>;
   openRouterCall: () => Promise<T>;
   timeoutMs?: number;
+  openRouterModel?: string;
 }
 
 @Injectable()
@@ -263,13 +265,16 @@ export class AiResilienceService {
       legacyTipoError = 'api_error';
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       flujo: params.flujo,
       proveedorFallido: params.proveedorFallido,
       causa,
       tipoError: params.tipoError || legacyTipoError,
       tipoFallo,
       proveedorActivado: params.proveedorActivado,
+      ...(params.modeloOpenRouter
+        ? { modeloOpenRouter: params.modeloOpenRouter }
+        : {}),
     };
 
     this.logger.warn(`FALLBACK_EVENT ${JSON.stringify(payload)}`);
@@ -314,6 +319,7 @@ export class AiResilienceService {
         error: geminiError,
         tipoFallo: classified.tipo,
         proveedorActivado: 'openrouter',
+        modeloOpenRouter: params.openRouterModel,
       });
 
       // 2. Fallback a proveedor secundario: OpenRouter API
