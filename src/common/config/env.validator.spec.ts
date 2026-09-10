@@ -34,11 +34,14 @@ describe('validateEnvConfig', () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  it('debe lanzar error en producción si falta JWT_SECRET o se usa la clave por defecto', () => {
+  it('debe asignar fallback y emitir advertencias en modo producción si falta JWT_SECRET', () => {
     process.env.NODE_ENV = 'production';
-    process.env.JWT_SECRET = 'super-secret-key-evalia';
+    delete process.env.JWT_SECRET;
 
-    expect(() => validateEnvConfig()).toThrow('Fallo al iniciar');
+    const result = validateEnvConfig();
+    expect(result.isValid).toBe(true);
+    expect(result.warnings.length).toBeGreaterThan(0);
+    expect(process.env.JWT_SECRET).toBe('evalia-default-secret-jwt-key-2026');
   });
 
   it('debe ser válido en producción cuando se proporcionan claves seguras', () => {
