@@ -4,30 +4,75 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsArray,
+} from 'class-validator';
 
 export class CreateCursoDto {
+  @IsString()
+  @IsNotEmpty()
   materia: string;
+
+  @IsNumber()
+  @IsNotEmpty()
   anio: number;
+
+  @IsString()
+  @IsNotEmpty()
   division: string;
+
+  @IsNumber()
+  @IsNotEmpty()
   anioLectivo: number;
 }
 
 export class UpdateCursoDto {
+  @IsOptional()
+  @IsString()
   materia?: string;
+
+  @IsOptional()
+  @IsNumber()
   anio?: number;
+
+  @IsOptional()
+  @IsString()
   division?: string;
+
+  @IsOptional()
+  @IsNumber()
   anioLectivo?: number;
 }
 
 export class RegisterAlumnoDto {
+  @IsString()
+  @IsNotEmpty()
   nombre: string;
+
+  @IsString()
+  @IsNotEmpty()
   apellido: string;
+
+  @IsString()
+  @IsNotEmpty()
   legajo: string;
 }
 
 export class CreateExamenDto {
+  @IsString()
+  @IsNotEmpty()
   titulo: string;
+
+  @IsNumber()
+  @IsNotEmpty()
   puntajeTotal: number;
+
+  @IsArray()
+  @IsNotEmpty()
   preguntas: Array<{
     enunciado: string;
     respuestaEsperada: string;
