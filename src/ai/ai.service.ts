@@ -82,7 +82,7 @@ export const GeneratedExamSchema = z
 export type GeneratedExam = z.infer<typeof GeneratedExamSchema>;
 export type GeneratedQuestion = z.infer<typeof GeneratedQuestionSchema>;
 
-interface QuestionData {
+export interface QuestionData {
   id: string;
   enunciado: string;
   respuestaEsperada: string;
@@ -97,9 +97,63 @@ export interface GenerateExamInput {
   mimeType?: string;
 }
 
+export interface OpenRouterModelOption {
+  id: string;
+  nombre: string;
+  proveedor: string;
+  descripcion: string;
+  esMultimodal: boolean;
+}
+
+export interface GeminiPrincipalConfig {
+  modelo: string;
+  configurado: boolean;
+}
+
+export interface OpenRouterConfigResponse {
+  modeloActivo: string;
+  origen: 'memoria' | 'env_default';
+  modelosDisponibles: OpenRouterModelOption[];
+  geminiPrincipal: GeminiPrincipalConfig;
+}
+
+export const OPENROUTER_HOMOLOGATED_MODELS: OpenRouterModelOption[] = [
+  {
+    id: 'openai/gpt-4o-mini',
+    nombre: 'GPT-4o Mini',
+    proveedor: 'OpenAI',
+    descripcion: 'Rápido y económico, balance óptimo para MVP.',
+    esMultimodal: true,
+  },
+  {
+    id: 'anthropic/claude-3.5-sonnet',
+    nombre: 'Claude 3.5 Sonnet',
+    proveedor: 'Anthropic',
+    descripcion: 'Excelente razonamiento pedagógico y análisis visual.',
+    esMultimodal: true,
+  },
+  {
+    id: 'meta-llama/llama-3.3-70b-instruct',
+    nombre: 'Llama 3.3 70B Instruct',
+    proveedor: 'Meta',
+    descripcion: 'Alternativa open-source de alta performance para texto.',
+    esMultimodal: false,
+  },
+  {
+    id: 'google/gemini-2.0-flash-001',
+    nombre: 'Gemini 2.0 Flash',
+    proveedor: 'Google',
+    descripcion: 'Respaldo alternativo de alta velocidad y multimodal.',
+    esMultimodal: true,
+  },
+];
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
+  private activeOpenRouterModel: string =
+    process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+  private isModelOverridden = false;
 
   constructor(private readonly aiResilienceService: AiResilienceService) {}
 
@@ -111,10 +165,76 @@ export class AiService {
   }
 
   /**
+   * Retorna el modelo de respaldo activo actual, el catálogo de modelos disponibles,
+   * el origen del modelo activo ('memoria' si fue modificado dinámicamente o 'env_default'),
+   * y la información del proveedor principal Gemini (modelo configurado y si la API Key está presente).
+   */
+  getOpenRouterConfig(): OpenRouterConfigResponse {
+    const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
+    const geminiModel =
+      process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+
+    return {
+      modeloActivo: this.activeOpenRouterModel,
+      origen: this.isModelOverridden ? 'memoria' : 'env_default',
+      modelosDisponibles: OPENROUTER_HOMOLOGATED_MODELS,
+      geminiPrincipal: {
+        modelo: geminiModel,
+        configurado: Boolean(geminiApiKey && geminiApiKey.length > 0),
+      },
+    };
+  }
+
+  /**
+   * Actualiza en tiempo de ejecución el modelo de OpenRouter que se utilizará en los fallbacks.
+   * Valida que el modelo pertenezca al catálogo homologado.
+   */
+  setActiveOpenRouterModel(modelId: string): OpenRouterConfigResponse {
+    if (!modelId || typeof modelId !== 'string' || !modelId.trim()) {
+      throw new BadRequestException(
+        'El identificador del modelo no puede estar vacío y debe ser una cadena de texto.',
+      );
+    }
+
+    const trimmedModel = modelId.trim();
+    const exists = OPENROUTER_HOMOLOGATED_MODELS.some(
+      (m) => m.id === trimmedModel,
+    );
+
+    if (!exists) {
+      const permitidos = OPENROUTER_HOMOLOGATED_MODELS.map((m) => m.id).join(
+        ', ',
+      );
+      throw new BadRequestException(
+        `El modelo '${trimmedModel}' no está dentro del catálogo de modelos homologados. Modelos permitidos: ${permitidos}`,
+      );
+    }
+
+    this.activeOpenRouterModel = trimmedModel;
+    this.isModelOverridden = true;
+    this.logger.log(
+      `Modelo de respaldo OpenRouter actualizado dinámicamente a: ${trimmedModel}`,
+    );
+
+    return this.getOpenRouterConfig();
+  }
+
+  /**
+   * Devuelve el identificador técnico del modelo activo de OpenRouter.
+   */
+  getActiveOpenRouterModel(): string {
+    return this.activeOpenRouterModel;
+  }
+
+  /**
    * Emite un log estructurado con la información del evento de fallback (delegado a AiResilienceService).
    */
   private logFallbackEvent(params: FallbackEventDetails): void {
-    this.aiResilienceService.logFallbackEvent(params);
+    this.aiResilienceService.logFallbackEvent({
+      ...params,
+      modeloOpenRouter:
+        params.modeloOpenRouter || this.getActiveOpenRouterModel(),
+    });
   }
 
   /**
@@ -143,6 +263,7 @@ export class AiService {
         context: 'evaluacion',
         geminiCall: () => this.callGeminiWithTimeout(fileBase64, mimeType, prompt),
         openRouterCall: () => this.callOpenRouter(fileBase64, mimeType, prompt),
+        openRouterModel: this.getActiveOpenRouterModel(),
       });
     } catch (fallbackError: unknown) {
       const msg =
@@ -249,6 +370,7 @@ export class AiService {
             );
           return this.parseAndValidateExamJson(openRouterResponseText);
         },
+        openRouterModel: this.getActiveOpenRouterModel(),
       });
     } catch (fallbackError: unknown) {
       const msg =
@@ -302,6 +424,7 @@ export class AiService {
             allowEmpty: true,
             logLabel: 'extracción de texto',
           }),
+        openRouterModel: this.getActiveOpenRouterModel(),
       });
     } catch (fallbackError: unknown) {
       const msg =
@@ -509,8 +632,7 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       throw new Error('OPENROUTER_API_KEY no configurado en el entorno.');
     }
 
-    const modelName =
-      process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
+    const modelName = this.getActiveOpenRouterModel();
     this.logger.log(
       `Llamando a OpenRouter${params.logLabel ? ` para ${params.logLabel}` : ''} usando el modelo: ${modelName}...`,
     );
