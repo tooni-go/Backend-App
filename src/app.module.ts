@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+﻿import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AiModule } from './ai/ai.module';
@@ -8,6 +8,7 @@ import { EntregasModule } from './entregas/entregas.module';
 import { AuthModule } from './auth/auth.module';
 import { AlumnosModule } from './alumnos/alumnos.module';
 import { ExamenesModule } from './examenes/examenes.module';
+import { ProfesorModule } from './profesor/profesor.module';
 import { DocumentosModule } from './documentos/documentos.module';
 import { ReportesModule } from './reportes/reportes.module';
 
@@ -20,6 +21,7 @@ import { ReportesModule } from './reportes/reportes.module';
     AuthModule,
     AlumnosModule,
     ExamenesModule,
+    ProfesorModule,
     DocumentosModule,
     ReportesModule,
   ],
@@ -27,3 +29,5 @@ import { ReportesModule } from './reportes/reportes.module';
   providers: [AppService],
 })
 export class AppModule {}
+
+
