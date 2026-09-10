@@ -423,4 +423,218 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       }
     });
   });
+
+  describe('Gestión Dinámica de Modelo OpenRouter y Catálogo Homologado', () => {
+    it('inicializa el modelo activo con el valor por defecto "openai/gpt-4o-mini" cuando process.env.OPENROUTER_MODEL no está definido', () => {
+      const config = service.getOpenRouterConfig();
+      expect(config.modeloActivo).toBe('openai/gpt-4o-mini');
+      expect(config.origen).toBe('env_default');
+      expect(config.modelosDisponibles.length).toBeGreaterThan(0);
+      expect(config.geminiPrincipal).toBeDefined();
+      expect(typeof config.geminiPrincipal.modelo).toBe('string');
+      expect(typeof config.geminiPrincipal.configurado).toBe('boolean');
+      expect(service.getActiveOpenRouterModel()).toBe('openai/gpt-4o-mini');
+    });
+
+    it('devuelve geminiPrincipal con el modelo de GEMINI_MODEL y configurado: true si GEMINI_API_KEY está presente', () => {
+      const originalKey = process.env.GEMINI_API_KEY;
+      const originalModel = process.env.GEMINI_MODEL;
+      try {
+        process.env.GEMINI_API_KEY = 'test-gemini-key';
+        process.env.GEMINI_MODEL = 'gemini-2.5-flash';
+
+        const config = service.getOpenRouterConfig();
+        expect(config.geminiPrincipal).toEqual({
+          modelo: 'gemini-2.5-flash',
+          configurado: true,
+        });
+      } finally {
+        if (originalKey !== undefined) process.env.GEMINI_API_KEY = originalKey;
+        else delete process.env.GEMINI_API_KEY;
+        if (originalModel !== undefined) process.env.GEMINI_MODEL = originalModel;
+        else delete process.env.GEMINI_MODEL;
+      }
+    });
+
+    it('devuelve geminiPrincipal con configurado: false y modelo default cuando GEMINI_API_KEY no está configurada', () => {
+      const originalKey = process.env.GEMINI_API_KEY;
+      const originalModel = process.env.GEMINI_MODEL;
+      try {
+        delete process.env.GEMINI_API_KEY;
+        delete process.env.GEMINI_MODEL;
+
+        const config = service.getOpenRouterConfig();
+        expect(config.geminiPrincipal).toEqual({
+          modelo: 'gemini-3.1-flash-lite',
+          configurado: false,
+        });
+      } finally {
+        if (originalKey !== undefined) process.env.GEMINI_API_KEY = originalKey;
+        else delete process.env.GEMINI_API_KEY;
+        if (originalModel !== undefined) process.env.GEMINI_MODEL = originalModel;
+        else delete process.env.GEMINI_MODEL;
+      }
+    });
+
+    it('inicializa el modelo activo desde process.env.OPENROUTER_MODEL si está definido al instanciar', async () => {
+      const originalEnv = process.env.OPENROUTER_MODEL;
+      try {
+        process.env.OPENROUTER_MODEL = 'anthropic/claude-3.5-sonnet';
+        const customModule: TestingModule = await Test.createTestingModule({
+          providers: [AiService, AiResilienceService],
+        }).compile();
+        const customService = customModule.get<AiService>(AiService);
+
+        expect(customService.getActiveOpenRouterModel()).toBe(
+          'anthropic/claude-3.5-sonnet',
+        );
+        expect(customService.getOpenRouterConfig().origen).toBe('env_default');
+      } finally {
+        if (originalEnv !== undefined) {
+          process.env.OPENROUTER_MODEL = originalEnv;
+        } else {
+          delete process.env.OPENROUTER_MODEL;
+        }
+      }
+    });
+
+    it('actualiza correctamente el modelo activo con setActiveOpenRouterModel y marca origen en "memoria"', () => {
+      const updatedConfig = service.setActiveOpenRouterModel(
+        'anthropic/claude-3.5-sonnet',
+      );
+
+      expect(updatedConfig.modeloActivo).toBe('anthropic/claude-3.5-sonnet');
+      expect(updatedConfig.origen).toBe('memoria');
+      expect(service.getActiveOpenRouterModel()).toBe(
+        'anthropic/claude-3.5-sonnet',
+      );
+    });
+
+    it('permite cambiar a otros modelos homologados como google/gemini-2.0-flash-001 o meta-llama/llama-3.3-70b-instruct', () => {
+      service.setActiveOpenRouterModel('meta-llama/llama-3.3-70b-instruct');
+      expect(service.getActiveOpenRouterModel()).toBe(
+        'meta-llama/llama-3.3-70b-instruct',
+      );
+
+      service.setActiveOpenRouterModel('google/gemini-2.0-flash-001');
+      expect(service.getActiveOpenRouterModel()).toBe(
+        'google/gemini-2.0-flash-001',
+      );
+    });
+
+    it('rechaza modelos no homologados lanzando BadRequestException con mensaje descriptivo', () => {
+      expect(() =>
+        service.setActiveOpenRouterModel('modelo-no-existente/xyz'),
+      ).toThrow(BadRequestException);
+
+      try {
+        service.setActiveOpenRouterModel('modelo-invalido');
+      } catch (err: any) {
+        expect(err).toBeInstanceOf(BadRequestException);
+        expect(err.message).toContain('no está dentro del catálogo');
+      }
+    });
+
+    it('rechaza modelos vacíos o no válidos con BadRequestException', () => {
+      expect(() => service.setActiveOpenRouterModel('')).toThrow(
+        BadRequestException,
+      );
+      expect(() => service.setActiveOpenRouterModel('   ')).toThrow(
+        BadRequestException,
+      );
+      expect(() =>
+        service.setActiveOpenRouterModel(null as unknown as string),
+      ).toThrow(BadRequestException);
+    });
+
+    it('utiliza el modelo dinámicamente configurado en el payload HTTP enviado a OpenRouter al ocurrir fallback', async () => {
+      process.env.GEMINI_API_KEY = 'test-gemini-key';
+      process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+
+      // Cambiar dinámicamente el modelo a Claude 3.5 Sonnet
+      service.setActiveOpenRouterModel('anthropic/claude-3.5-sonnet');
+
+      const mockGenerateContent = jest.fn().mockRejectedValue(
+        new Error('Gemini Unavailable'),
+      );
+
+      (GoogleGenAI as unknown as jest.Mock).mockImplementation(() => ({
+        models: {
+          generateContent: mockGenerateContent,
+        },
+      }));
+
+      const mockExamResponse = {
+        titulo: 'Examen de Prueba Dinámico',
+        preguntas: [
+          {
+            enunciado: 'Consigna',
+            respuestaEsperada: 'Respuesta',
+            puntajeMaximo: 10,
+            criteriosIA: 'Criterio',
+            esEvaluacionVisual: false,
+          },
+        ],
+      };
+
+      let capturedRequestBody: any = null;
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockImplementation(async (url: string, init: any) => {
+        capturedRequestBody = JSON.parse(init.body);
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: JSON.stringify(mockExamResponse) } }],
+          }),
+        };
+      }) as any;
+
+      try {
+        await service.generateExam({ texto: 'Generar examen con fallback' });
+
+        expect(capturedRequestBody).toBeDefined();
+        expect(capturedRequestBody.model).toBe('anthropic/claude-3.5-sonnet');
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+
+    it('incluye modeloOpenRouter en el log estructurado de fallback', async () => {
+      const logFallbackSpy = jest.spyOn(resilienceService, 'logFallbackEvent');
+      service.setActiveOpenRouterModel('anthropic/claude-3.5-sonnet');
+
+      jest
+        .spyOn(service as any, 'callGeminiForExamGeneration')
+        .mockRejectedValue(new Error('Timeout en Gemini'));
+
+      jest
+        .spyOn(service as any, 'callOpenRouterForExamGeneration')
+        .mockResolvedValue(
+          JSON.stringify({
+            titulo: 'Test',
+            preguntas: [
+              {
+                enunciado: 'P1',
+                respuestaEsperada: 'R1',
+                puntajeMaximo: 10,
+                criteriosIA: 'C1',
+                esEvaluacionVisual: false,
+              },
+            ],
+          }),
+        );
+
+      await service.generateExam({ texto: 'Consigna' });
+
+      expect(logFallbackSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          flujo: 'generacion',
+          proveedorFallido: 'gemini',
+          proveedorActivado: 'openrouter',
+          modeloOpenRouter: 'anthropic/claude-3.5-sonnet',
+        }),
+      );
+    });
+  });
 });
+
