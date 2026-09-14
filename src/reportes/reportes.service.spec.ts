@@ -40,7 +40,9 @@ describe('ReportesService', () => {
         ['notas', 'Matemática Aplicada', '5° A / Mañana', '2026-09-01'],
         'csv',
       );
-      expect(filename).toBe('notas-matematica_aplicada-5_a_manana-2026-09-01.csv');
+      expect(filename).toBe(
+        'notas-matematica_aplicada-5_a_manana-2026-09-01.csv',
+      );
     });
 
     it('debe ignorar valores nulos o vacíos', () => {
@@ -56,12 +58,12 @@ describe('ReportesService', () => {
     it('debe lanzar NotFoundException si el examen no existe', async () => {
       mockPrismaService.examen.findUnique.mockResolvedValue(null);
 
-      await expect(service.getExamenReportData('examen-inexistente')).rejects.toThrow(
-        NotFoundException,
-      );
-      await expect(service.getExamenReportData('examen-inexistente')).rejects.toThrow(
-        'Examen con ID examen-inexistente no encontrado.',
-      );
+      await expect(
+        service.getExamenReportData('examen-inexistente'),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getExamenReportData('examen-inexistente'),
+      ).rejects.toThrow('Examen con ID examen-inexistente no encontrado.');
     });
 
     it('debe generar reporte correctamente para un examen sin entregas (caso vacío válido)', async () => {
@@ -168,12 +170,12 @@ describe('ReportesService', () => {
     it('debe lanzar NotFoundException si el curso no existe', async () => {
       mockPrismaService.curso.findUnique.mockResolvedValue(null);
 
-      await expect(service.getCursoReportData('curso-inexistente')).rejects.toThrow(
-        NotFoundException,
-      );
-      await expect(service.getCursoReportData('curso-inexistente')).rejects.toThrow(
-        'Curso con ID curso-inexistente no encontrado.',
-      );
+      await expect(
+        service.getCursoReportData('curso-inexistente'),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getCursoReportData('curso-inexistente'),
+      ).rejects.toThrow('Curso con ID curso-inexistente no encontrado.');
     });
 
     it('debe generar reporte vacío si el curso no tiene alumnos ni exámenes', async () => {
@@ -189,7 +191,12 @@ describe('ReportesService', () => {
 
       const report = await service.getCursoReportData('curso-vacio');
 
-      expect(report.headers).toEqual(['Legajo', 'Nombre', 'Apellido', 'Promedio']);
+      expect(report.headers).toEqual([
+        'Legajo',
+        'Nombre',
+        'Apellido',
+        'Promedio',
+      ]);
       expect(report.rows).toEqual([]);
     });
 
@@ -391,7 +398,9 @@ describe('ReportesService', () => {
       expect(result.buffer[2]).toBe(0xbf);
 
       const text = result.buffer.toString('utf-8');
-      expect(text).toContain('Legajo,Nombre,Apellido,Examen de Álgebra,Promedio');
+      expect(text).toContain(
+        'Legajo,Nombre,Apellido,Examen de Álgebra,Promedio',
+      );
       expect(text).toContain('L-500,Matías,Báez,9.5,9.5');
     });
 

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import * as mammoth from 'mammoth';
 import { AiService } from '../ai/ai.service';
 import {
@@ -31,7 +27,9 @@ export class DocumentosService {
    * Para TXT y DOCX la extracción es determinística y exacta (sin IA).
    * Para PDF e imágenes se emplea visión e IA con transcripción literal fiel.
    */
-  async extractText(file?: Express.Multer.File): Promise<ExtraerTextoResponseDto> {
+  async extractText(
+    file?: Express.Multer.File,
+  ): Promise<ExtraerTextoResponseDto> {
     // 1. Validar presencia del archivo y buffer
     if (!file || !file.buffer) {
       throw new BadRequestException(
@@ -47,7 +45,10 @@ export class DocumentosService {
     }
 
     // 3. Validar tamaño máximo permitido
-    const maxUploadSizeMb = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
+    const maxUploadSizeMb = parseInt(
+      process.env.MAX_UPLOAD_SIZE_MB || '10',
+      10,
+    );
     const maxUploadSizeBytes = maxUploadSizeMb * 1024 * 1024;
     if (file.size && file.size > maxUploadSizeBytes) {
       throw new BadRequestException(
@@ -70,15 +71,20 @@ export class DocumentosService {
       }
 
       case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-        this.logger.log('Extrayendo texto determinístico de archivo DOCX con mammoth...');
+        this.logger.log(
+          'Extrayendo texto determinístico de archivo DOCX con mammoth...',
+        );
         try {
           const result = await mammoth.extractRawText({ buffer: file.buffer });
           textoExtraido = (result.value || '').trim();
           fuenteTipo = 'docx';
           requiereRevision = false;
         } catch (error: unknown) {
-          const errMessage = error instanceof Error ? error.message : String(error);
-          this.logger.error(`Error al procesar archivo DOCX con mammoth: ${errMessage}`);
+          const errMessage =
+            error instanceof Error ? error.message : String(error);
+          this.logger.error(
+            `Error al procesar archivo DOCX con mammoth: ${errMessage}`,
+          );
           throw new BadRequestException(
             'No se pudo leer el archivo DOCX provisto. Asegúrese de que el documento no esté dañado.',
           );
@@ -101,7 +107,9 @@ export class DocumentosService {
       case 'image/jpg':
       case 'image/png':
       case 'image/webp': {
-        this.logger.log(`Extrayendo texto de imagen (${file.mimetype}) mediante IA...`);
+        this.logger.log(
+          `Extrayendo texto de imagen (${file.mimetype}) mediante IA...`,
+        );
         textoExtraido = await this.aiService.extractTextFromDocument(
           file.buffer,
           file.mimetype,

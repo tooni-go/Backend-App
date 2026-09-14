@@ -186,7 +186,13 @@ export class ReportesService {
     }
 
     const examenesHeaders = curso.examenes.map((e) => e.titulo);
-    const headers = ['Legajo', 'Nombre', 'Apellido', ...examenesHeaders, 'Promedio'];
+    const headers = [
+      'Legajo',
+      'Nombre',
+      'Apellido',
+      ...examenesHeaders,
+      'Promedio',
+    ];
 
     // Ordenar alumnos por apellido y nombre
     const sortedAlumnos = [...curso.alumnos]
@@ -255,7 +261,10 @@ export class ReportesService {
   /**
    * Genera el contenido binario de un archivo CSV con BOM UTF-8.
    */
-  private generateCsvBuffer(headers: string[], rows: (string | number)[][]): Buffer {
+  private generateCsvBuffer(
+    headers: string[],
+    rows: (string | number)[][],
+  ): Buffer {
     const records = [headers, ...rows];
     const csvContent = stringify(records);
     const bom = Buffer.from('\uFEFF', 'utf-8');
@@ -348,7 +357,10 @@ export class ReportesService {
       // Filas de datos
       options.rows.forEach((row, rowIndex) => {
         // Control de salto de página
-        if (currentY + rowHeight > doc.page.height - doc.page.margins.bottom - 30) {
+        if (
+          currentY + rowHeight >
+          doc.page.height - doc.page.margins.bottom - 30
+        ) {
           doc.addPage();
           currentY = doc.page.margins.top;
           drawHeader();
@@ -409,7 +421,12 @@ export class ReportesService {
   ): Promise<{ filename: string; buffer: Buffer }> {
     const data = await this.getExamenReportData(examenId);
     const filename = this.sanitizeFilename(
-      ['notas', data.metadata.materia, data.metadata.division, data.metadata.fechaGeneracion],
+      [
+        'notas',
+        data.metadata.materia,
+        data.metadata.division,
+        data.metadata.fechaGeneracion,
+      ],
       'csv',
     );
     const buffer = this.generateCsvBuffer(data.headers, data.rows);
@@ -424,7 +441,12 @@ export class ReportesService {
   ): Promise<{ filename: string; buffer: Buffer }> {
     const data = await this.getExamenReportData(examenId);
     const filename = this.sanitizeFilename(
-      ['notas', data.metadata.materia, data.metadata.division, data.metadata.fechaGeneracion],
+      [
+        'notas',
+        data.metadata.materia,
+        data.metadata.division,
+        data.metadata.fechaGeneracion,
+      ],
       'pdf',
     );
     const buffer = await this.generatePdfBuffer({
@@ -449,7 +471,12 @@ export class ReportesService {
   ): Promise<{ filename: string; buffer: Buffer }> {
     const data = await this.getCursoReportData(cursoId);
     const filename = this.sanitizeFilename(
-      ['notas', data.metadata.materia, data.metadata.division, data.metadata.fechaGeneracion],
+      [
+        'notas',
+        data.metadata.materia,
+        data.metadata.division,
+        data.metadata.fechaGeneracion,
+      ],
       'csv',
     );
     const buffer = this.generateCsvBuffer(data.headers, data.rows);
@@ -464,7 +491,12 @@ export class ReportesService {
   ): Promise<{ filename: string; buffer: Buffer }> {
     const data = await this.getCursoReportData(cursoId);
     const filename = this.sanitizeFilename(
-      ['notas', data.metadata.materia, data.metadata.division, data.metadata.fechaGeneracion],
+      [
+        'notas',
+        data.metadata.materia,
+        data.metadata.division,
+        data.metadata.fechaGeneracion,
+      ],
       'pdf',
     );
     const buffer = await this.generatePdfBuffer({

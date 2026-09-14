@@ -40,10 +40,7 @@ export class ReportesController {
    * Exporta las calificaciones consolidadas de un curso en formato CSV.
    */
   @Get('curso/:cursoId/csv')
-  async getCursoCsv(
-    @Param('cursoId') cursoId: string,
-    @Res() res: Response,
-  ) {
+  async getCursoCsv(@Param('cursoId') cursoId: string, @Res() res: Response) {
     const { filename, buffer } =
       await this.reportesService.generateCursoCsv(cursoId);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -55,10 +52,7 @@ export class ReportesController {
    * Exporta las calificaciones consolidadas de un curso en formato PDF.
    */
   @Get('curso/:cursoId/pdf')
-  async getCursoPdf(
-    @Param('cursoId') cursoId: string,
-    @Res() res: Response,
-  ) {
+  async getCursoPdf(@Param('cursoId') cursoId: string, @Res() res: Response) {
     const { filename, buffer } =
       await this.reportesService.generateCursoPdf(cursoId);
     res.setHeader('Content-Type', 'application/pdf');
