@@ -809,45 +809,35 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     );
     let responseText = '';
 
-    // 1. Intentar llamar a Gemini API (Proveedor principal)
     try {
-      this.logger.log(
-        `Iniciando regeneración de pregunta (${tipoAjuste}) con Gemini API...`,
-      );
-      responseText = await this.invokeGemini({
-        prompt,
-        jsonResponse: true,
-        timeoutErrorMessage:
-          'Timeout de 30 segundos en Gemini API alcanzado durante regeneración de pregunta',
+      responseText = await this.aiResilienceService.callWithFallback({
+        context: 'regeneracion',
+        geminiCall: () =>
+          this.invokeGemini({
+            prompt,
+            jsonResponse: true,
+            timeoutErrorMessage:
+              'Timeout de 30 segundos en Gemini API alcanzado durante regeneración de pregunta',
+          }),
+        openRouterCall: () =>
+          this.invokeOpenRouter({
+            prompt,
+            jsonResponse: true,
+            logLabel: 'regeneración de pregunta',
+          }),
+        openRouterModel: this.getActiveOpenRouterModel(),
       });
-      this.logger.log('Pregunta regenerada exitosamente con Gemini.');
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+    } catch (fallbackError: unknown) {
+      const fbMessage =
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError);
       this.logger.error(
-        `Fallo en Gemini API durante regeneración de pregunta: ${errorMessage}. Conmutando a OpenRouter...`,
+        `Fallo completo en regeneración de pregunta tras fallback: ${fbMessage}`,
       );
-
-      // 2. Fallback a OpenRouter (Proveedor secundario)
-      try {
-        responseText = await this.invokeOpenRouter({
-          prompt,
-          jsonResponse: true,
-          logLabel: 'regeneración de pregunta',
-        });
-        this.logger.log('Pregunta regenerada exitosamente con OpenRouter.');
-      } catch (fallbackError: unknown) {
-        const fbMessage =
-          fallbackError instanceof Error
-            ? fallbackError.message
-            : String(fallbackError);
-        this.logger.error(
-          `Fallo también en el fallback de OpenRouter para regeneración de pregunta: ${fbMessage}`,
-        );
-        throw new InternalServerErrorException(
-          'No fue posible regenerar la pregunta con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
-        );
-      }
+      throw new InternalServerErrorException(
+        'No fue posible regenerar la pregunta con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
+      );
     }
 
     // 3. Procesar y Validar la respuesta JSON
