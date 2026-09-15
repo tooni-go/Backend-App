@@ -1,6 +1,8 @@
 import {
+  IsBoolean,
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   ValidateNested,
@@ -40,6 +42,28 @@ export class ParametrosRegeneracionDto {
   formatoDestino?: FormatoDestino;
 }
 
+export class PreguntaDataDto {
+  @IsOptional()
+  @IsString()
+  enunciado?: string;
+
+  @IsOptional()
+  @IsString()
+  respuestaEsperada?: string;
+
+  @IsOptional()
+  @IsNumber()
+  puntajeMaximo?: number;
+
+  @IsOptional()
+  @IsString()
+  criteriosIA?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  esEvaluacionVisual?: boolean;
+}
+
 export class RegenerarPreguntaDto {
   @IsString({ message: 'preguntaId debe ser un texto' })
   @IsNotEmpty({ message: 'preguntaId es obligatorio' })
@@ -56,4 +80,10 @@ export class RegenerarPreguntaDto {
   @ValidateNested()
   @Type(() => ParametrosRegeneracionDto)
   parametros?: ParametrosRegeneracionDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PreguntaDataDto)
+  preguntaData?: PreguntaDataDto;
 }
+

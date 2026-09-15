@@ -250,5 +250,37 @@ describe('ExamenesService - regenerarPregunta', () => {
         FormatoDestino.MULTIPLE_CHOICE,
       );
     });
+
+    it('debe permitir regenerar preguntas temporales en memoria pasando preguntaData cuando no existen en BD', async () => {
+      mockPrismaService.pregunta.findUnique.mockResolvedValue(null);
+
+      mockAiService.regenerarPregunta.mockResolvedValue({
+        enunciado: 'Consigna regenerada desde memoria.',
+        respuestaEsperada: 'Respuesta modelo generada.',
+        esEvaluacionVisual: false,
+      });
+
+      const response = await service.regenerarPregunta({
+        preguntaId: 'q-temp-1',
+        tipoAjuste: TipoAjuste.REFRASEO,
+        preguntaData: {
+          enunciado: 'Consigna temporal en memoria',
+          respuestaEsperada: 'Respuesta temporal en memoria',
+          puntajeMaximo: 5,
+        },
+      });
+
+      expect(mockAiService.regenerarPregunta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enunciado: 'Consigna temporal en memoria',
+          respuestaEsperada: 'Respuesta temporal en memoria',
+        }),
+        TipoAjuste.REFRASEO,
+        undefined,
+      );
+
+      expect(response.sugerencia.enunciado).toBe('Consigna regenerada desde memoria.');
+    });
   });
 });
+

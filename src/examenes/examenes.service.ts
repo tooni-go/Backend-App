@@ -78,15 +78,27 @@ export class ExamenesService {
       );
     }
 
-    // 2. Buscar la pregunta existente en la base de datos
-    const pregunta = await this.prisma.pregunta.findUnique({
+    // 2. Buscar la pregunta existente en la base de datos (o usar datos en memoria si se proporcionaron)
+    let pregunta = await this.prisma.pregunta.findUnique({
       where: { id: dto.preguntaId },
     });
 
     if (!pregunta) {
-      throw new NotFoundException(
-        `Pregunta con ID ${dto.preguntaId} no encontrada.`,
-      );
+      if (dto.preguntaData?.enunciado && dto.preguntaData?.respuestaEsperada) {
+        pregunta = {
+          id: dto.preguntaId,
+          examenId: 'memoria',
+          enunciado: dto.preguntaData.enunciado,
+          respuestaEsperada: dto.preguntaData.respuestaEsperada,
+          puntajeMaximo: dto.preguntaData.puntajeMaximo ?? 10,
+          criteriosIA: dto.preguntaData.criteriosIA ?? null,
+          esEvaluacionVisual: dto.preguntaData.esEvaluacionVisual ?? false,
+        };
+      } else {
+        throw new NotFoundException(
+          `Pregunta con ID ${dto.preguntaId} no encontrada.`,
+        );
+      }
     }
 
     // 3. Solicitar la regeneración a AiService
