@@ -6,10 +6,13 @@ import {
   Body,
   UploadedFile,
   UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService } from './examenes.service';
 import { GeneratedExam } from '../ai/ai.service';
+import { RegenerarPreguntaDto } from './dto/regenerar-pregunta.dto';
 
 @Controller('api/v1/examenes')
 export class ExamenesController {
@@ -31,6 +34,15 @@ export class ExamenesController {
       texto,
       file,
     });
+  }
+
+  /**
+   * Endpoint de regeneración atómica de una consigna individual con IA.
+   */
+  @Post('preguntas/regenerar-individual')
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async regenerarPregunta(@Body() dto: RegenerarPreguntaDto) {
+    return this.examenesService.regenerarPregunta(dto);
   }
 
   /**

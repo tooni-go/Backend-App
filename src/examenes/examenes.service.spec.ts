@@ -1,0 +1,286 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { ExamenesService } from './examenes.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { AiService } from '../ai/ai.service';
+import {
+  TipoAjuste,
+  NivelDificultad,
+  FormatoDestino,
+} from './dto/regenerar-pregunta.dto';
+
+describe('ExamenesService - regenerarPregunta', () => {
+  let service: ExamenesService;
+
+  const mockPrismaService = {
+    examen: {
+      findUnique: jest.fn(),
+    },
+    pregunta: {
+      findUnique: jest.fn(),
+    },
+  };
+
+  const mockAiService = {
+    generateExam: jest.fn(),
+    regenerarPregunta: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ExamenesService,
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        {
+          provide: AiService,
+          useValue: mockAiService,
+        },
+      ],
+    }).compile();
+
+    service = module.get<ExamenesService>(ExamenesService);
+    jest.clearAllMocks();
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('Validación de parámetros y excepciones', () => {
+    it('debe lanzar BadRequestException si tipoAjuste es CAMBIO_DIFICULTAD y falta nivelDificultad', async () => {
+      await expect(
+        service.regenerarPregunta({
+          preguntaId: 'p-1',
+          tipoAjuste: TipoAjuste.CAMBIO_DIFICULTAD,
+          parametros: {},
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.regenerarPregunta({
+          preguntaId: 'p-1',
+          tipoAjuste: TipoAjuste.CAMBIO_DIFICULTAD,
+        }),
+      ).rejects.toThrow(
+        'Para el tipo de ajuste CAMBIO_DIFICULTAD debe especificar el parámetro nivelDificultad',
+      );
+
+      expect(mockPrismaService.pregunta.findUnique).not.toHaveBeenCalled();
+      expect(mockAiService.regenerarPregunta).not.toHaveBeenCalled();
+    });
+
+    it('debe lanzar BadRequestException si tipoAjuste es CAMBIO_FORMATO y falta formatoDestino', async () => {
+      await expect(
+        service.regenerarPregunta({
+          preguntaId: 'p-1',
+          tipoAjuste: TipoAjuste.CAMBIO_FORMATO,
+          parametros: {},
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.regenerarPregunta({
+          preguntaId: 'p-1',
+          tipoAjuste: TipoAjuste.CAMBIO_FORMATO,
+        }),
+      ).rejects.toThrow(
+        'Para el tipo de ajuste CAMBIO_FORMATO debe especificar el parámetro formatoDestino',
+      );
+
+      expect(mockPrismaService.pregunta.findUnique).not.toHaveBeenCalled();
+      expect(mockAiService.regenerarPregunta).not.toHaveBeenCalled();
+    });
+
+    it('debe lanzar NotFoundException si la pregunta no existe en la base de datos', async () => {
+      mockPrismaService.pregunta.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.regenerarPregunta({
+          preguntaId: 'pregunta-inexistente',
+          tipoAjuste: TipoAjuste.REFRASEO,
+        }),
+      ).rejects.toThrow(NotFoundException);
+
+      await expect(
+        service.regenerarPregunta({
+          preguntaId: 'pregunta-inexistente',
+          tipoAjuste: TipoAjuste.REFRASEO,
+        }),
+      ).rejects.toThrow('Pregunta con ID pregunta-inexistente no encontrada.');
+
+      expect(mockAiService.regenerarPregunta).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Flujos exitosos de regeneración', () => {
+    it('debe procesar un REFRASEO exitoso devolviendo preguntaOriginal y sugerencia estructurada', async () => {
+      mockPrismaService.pregunta.findUnique.mockResolvedValue({
+        id: 'p-123',
+        examenId: 'ex-456',
+        enunciado: 'Calcular la derivada de f(x) = x^2.',
+        respuestaEsperada: "f'(x) = 2x",
+        puntajeMaximo: 5,
+        criteriosIA: 'Aplicar la regla de potencias.',
+        esEvaluacionVisual: false,
+      });
+
+      mockAiService.regenerarPregunta.mockResolvedValue({
+        enunciado:
+          'Determine la función derivada de la función cuadrática f(x) = x^2.',
+        respuestaEsperada: "f'(x) = 2x utilizando la regla de la potencia.",
+        esEvaluacionVisual: false,
+      });
+
+      const response = await service.regenerarPregunta({
+        preguntaId: 'p-123',
+        tipoAjuste: TipoAjuste.REFRASEO,
+      });
+
+      expect(mockPrismaService.pregunta.findUnique).toHaveBeenCalledWith({
+        where: { id: 'p-123' },
+      });
+
+      expect(mockAiService.regenerarPregunta).toHaveBeenCalledWith(
+        {
+          enunciado: 'Calcular la derivada de f(x) = x^2.',
+          respuestaEsperada: "f'(x) = 2x",
+          puntajeMaximo: 5,
+          criteriosIA: 'Aplicar la regla de potencias.',
+          esEvaluacionVisual: false,
+        },
+        TipoAjuste.REFRASEO,
+        undefined,
+      );
+
+      expect(response).toEqual({
+        preguntaOriginal: {
+          id: 'p-123',
+          enunciado: 'Calcular la derivada de f(x) = x^2.',
+          respuestaEsperada: "f'(x) = 2x",
+          puntajeMaximo: 5,
+        },
+        sugerencia: {
+          enunciado:
+            'Determine la función derivada de la función cuadrática f(x) = x^2.',
+          respuestaEsperada: "f'(x) = 2x utilizando la regla de la potencia.",
+          esEvaluacionVisual: false,
+        },
+        tipoAjuste: TipoAjuste.REFRASEO,
+        parametros: undefined,
+      });
+    });
+
+    it('debe procesar un CAMBIO_DIFICULTAD exitoso pasando parámetros correspondientes', async () => {
+      mockPrismaService.pregunta.findUnique.mockResolvedValue({
+        id: 'p-456',
+        examenId: 'ex-789',
+        enunciado: 'Enunciado simple',
+        respuestaEsperada: 'Respuesta simple',
+        puntajeMaximo: 10,
+        criteriosIA: null,
+        esEvaluacionVisual: false,
+      });
+
+      mockAiService.regenerarPregunta.mockResolvedValue({
+        enunciado: 'Enunciado avanzado y complejo con cálculo multivariable.',
+        respuestaEsperada: 'Respuesta con desarrollo paso a paso.',
+        esEvaluacionVisual: false,
+      });
+
+      const response = await service.regenerarPregunta({
+        preguntaId: 'p-456',
+        tipoAjuste: TipoAjuste.CAMBIO_DIFICULTAD,
+        parametros: {
+          nivelDificultad: NivelDificultad.DIFICIL,
+        },
+      });
+
+      expect(mockAiService.regenerarPregunta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enunciado: 'Enunciado simple',
+        }),
+        TipoAjuste.CAMBIO_DIFICULTAD,
+        { nivelDificultad: NivelDificultad.DIFICIL },
+      );
+
+      expect(response.sugerencia.enunciado).toContain('multivariable');
+      expect(response.tipoAjuste).toBe(TipoAjuste.CAMBIO_DIFICULTAD);
+      expect(response.parametros).toEqual({
+        nivelDificultad: NivelDificultad.DIFICIL,
+      });
+    });
+
+    it('debe procesar un CAMBIO_FORMATO exitoso pasando formatoDestino', async () => {
+      mockPrismaService.pregunta.findUnique.mockResolvedValue({
+        id: 'p-789',
+        examenId: 'ex-101',
+        enunciado: 'Definir mitosis.',
+        respuestaEsperada: 'División celular.',
+        puntajeMaximo: 4,
+        criteriosIA: null,
+        esEvaluacionVisual: false,
+      });
+
+      mockAiService.regenerarPregunta.mockResolvedValue({
+        enunciado:
+          '¿Qué proceso celular da lugar a dos células hijas idénticas?\nA) Meiosis\nB) Mitosis\nC) Fagocitosis\nD) Apoptosis',
+        respuestaEsperada: 'Opción B (Mitosis)',
+        esEvaluacionVisual: false,
+      });
+
+      const response = await service.regenerarPregunta({
+        preguntaId: 'p-789',
+        tipoAjuste: TipoAjuste.CAMBIO_FORMATO,
+        parametros: {
+          formatoDestino: FormatoDestino.MULTIPLE_CHOICE,
+        },
+      });
+
+      expect(mockAiService.regenerarPregunta).toHaveBeenCalledWith(
+        expect.anything(),
+        TipoAjuste.CAMBIO_FORMATO,
+        { formatoDestino: FormatoDestino.MULTIPLE_CHOICE },
+      );
+
+      expect(response.sugerencia.enunciado).toContain('¿Qué proceso celular');
+      expect(response.parametros?.formatoDestino).toBe(
+        FormatoDestino.MULTIPLE_CHOICE,
+      );
+    });
+
+    it('debe permitir regenerar preguntas temporales en memoria pasando preguntaData cuando no existen en BD', async () => {
+      mockPrismaService.pregunta.findUnique.mockResolvedValue(null);
+
+      mockAiService.regenerarPregunta.mockResolvedValue({
+        enunciado: 'Consigna regenerada desde memoria.',
+        respuestaEsperada: 'Respuesta modelo generada.',
+        esEvaluacionVisual: false,
+      });
+
+      const response = await service.regenerarPregunta({
+        preguntaId: 'q-temp-1',
+        tipoAjuste: TipoAjuste.REFRASEO,
+        preguntaData: {
+          enunciado: 'Consigna temporal en memoria',
+          respuestaEsperada: 'Respuesta temporal en memoria',
+          puntajeMaximo: 5,
+        },
+      });
+
+      expect(mockAiService.regenerarPregunta).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enunciado: 'Consigna temporal en memoria',
+          respuestaEsperada: 'Respuesta temporal en memoria',
+        }),
+        TipoAjuste.REFRASEO,
+        undefined,
+      );
+
+      expect(response.sugerencia.enunciado).toBe('Consigna regenerada desde memoria.');
+    });
+  });
+});
+

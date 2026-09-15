@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Headers,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Headers } from '@nestjs/common';
 import { CursosService } from './cursos.service';
 
 @Controller('api/v1/cursos')
@@ -14,7 +7,13 @@ export class CursosController {
 
   @Post()
   async createCurso(
-    @Body() body: { materia: string; anio: number; division: string; anioLectivo: number },
+    @Body()
+    body: {
+      materia: string;
+      anio: number;
+      division: string;
+      anioLectivo: number;
+    },
     @Headers('x-teacher-id') teacherId?: string,
   ) {
     return this.cursosService.createCurso(body, teacherId);
@@ -41,7 +40,8 @@ export class CursosController {
   @Post(':id/examenes')
   async createExam(
     @Param('id') cursoId: string,
-    @Body() body: {
+    @Body()
+    body: {
       titulo: string;
       preguntas: Array<{
         enunciado: string;

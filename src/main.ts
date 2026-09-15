@@ -15,7 +15,9 @@ async function bootstrap() {
   // Resolver la carpeta de uploads de manera configurable y consistente entre dev y prod
   const customUploadsDir = process.env.UPLOADS_DIR;
   const uploadsDir = customUploadsDir
-    ? (customUploadsDir.startsWith('/') ? customUploadsDir : join(process.cwd(), customUploadsDir))
+    ? customUploadsDir.startsWith('/')
+      ? customUploadsDir
+      : join(process.cwd(), customUploadsDir)
     : join(process.cwd(), 'uploads');
 
   if (!fs.existsSync(uploadsDir)) {

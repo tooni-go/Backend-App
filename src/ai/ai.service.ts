@@ -82,6 +82,26 @@ export const GeneratedExamSchema = z
 export type GeneratedExam = z.infer<typeof GeneratedExamSchema>;
 export type GeneratedQuestion = z.infer<typeof GeneratedQuestionSchema>;
 
+export const RegeneracionSugerenciaSchema = z.object({
+  enunciado: z.string().min(1, 'El enunciado no puede estar vacío'),
+  respuestaEsperada: z
+    .string()
+    .min(1, 'La respuesta esperada no puede estar vacía'),
+  esEvaluacionVisual: z.boolean(),
+});
+
+export type RegeneracionSugerencia = z.infer<
+  typeof RegeneracionSugerenciaSchema
+>;
+
+export interface RegenerarPreguntaInput {
+  enunciado: string;
+  respuestaEsperada: string;
+  puntajeMaximo: number;
+  criteriosIA?: string | null;
+  esEvaluacionVisual?: boolean;
+}
+
 export interface QuestionData {
   id: string;
   enunciado: string;
@@ -771,6 +791,182 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
     logLabel?: string;
   }): Promise<string> {
     return this.invokeOpenRouterRaw(params);
+  }
+
+  /**
+   * Regenera atómicamente una pregunta de examen con IA (cambio de dificultad, formato o refraseo).
+   * Utiliza Gemini API como proveedor principal y OpenRouter como fallback.
+   */
+  async regenerarPregunta(
+    pregunta: RegenerarPreguntaInput,
+    tipoAjuste: string,
+    parametros?: { nivelDificultad?: string; formatoDestino?: string },
+  ): Promise<RegeneracionSugerencia> {
+    const prompt = this.buildRegeneracionPrompt(
+      pregunta,
+      tipoAjuste,
+      parametros,
+    );
+    let responseText = '';
+
+    // 1. Intentar llamar a Gemini API (Proveedor principal)
+    try {
+      this.logger.log(
+        `Iniciando regeneración de pregunta (${tipoAjuste}) con Gemini API...`,
+      );
+      responseText = await this.invokeGemini({
+        prompt,
+        jsonResponse: true,
+        timeoutErrorMessage:
+          'Timeout de 30 segundos en Gemini API alcanzado durante regeneración de pregunta',
+      });
+      this.logger.log('Pregunta regenerada exitosamente con Gemini.');
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `Fallo en Gemini API durante regeneración de pregunta: ${errorMessage}. Conmutando a OpenRouter...`,
+      );
+
+      // 2. Fallback a OpenRouter (Proveedor secundario)
+      try {
+        responseText = await this.invokeOpenRouter({
+          prompt,
+          jsonResponse: true,
+          logLabel: 'regeneración de pregunta',
+        });
+        this.logger.log('Pregunta regenerada exitosamente con OpenRouter.');
+      } catch (fallbackError: unknown) {
+        const fbMessage =
+          fallbackError instanceof Error
+            ? fallbackError.message
+            : String(fallbackError);
+        this.logger.error(
+          `Fallo también en el fallback de OpenRouter para regeneración de pregunta: ${fbMessage}`,
+        );
+        throw new InternalServerErrorException(
+          'No fue posible regenerar la pregunta con los servicios de IA disponibles. Por favor, intente nuevamente más tarde.',
+        );
+      }
+    }
+
+    // 3. Procesar y Validar la respuesta JSON
+    try {
+      const cleanJson = this.cleanMarkdownJson(responseText);
+      const parsedData: unknown = JSON.parse(cleanJson);
+
+      const validation = RegeneracionSugerenciaSchema.safeParse(parsedData);
+      if (!validation.success) {
+        this.logger.warn(
+          `La sugerencia generada por la IA no cumple con el esquema requerido: ${validation.error.message}`,
+        );
+        throw new InternalServerErrorException(
+          'La sugerencia generada por la IA no cumple con el formato estructurado requerido.',
+        );
+      }
+
+      return validation.data;
+    } catch (parseError: unknown) {
+      if (parseError instanceof InternalServerErrorException) {
+        throw parseError;
+      }
+      const parseMessage =
+        parseError instanceof Error ? parseError.message : String(parseError);
+      this.logger.error(
+        `Error al parsear el JSON de la sugerencia generada: ${parseMessage}. Respuesta recibida:\n${responseText}`,
+      );
+      throw new InternalServerErrorException(
+        'Error al interpretar la estructura de la sugerencia generada por la IA.',
+      );
+    }
+  }
+
+  /**
+   * Construye el prompt para la regeneración atómica de una pregunta individual con IA.
+   */
+  private buildRegeneracionPrompt(
+    pregunta: RegenerarPreguntaInput,
+    tipoAjuste: string,
+    parametros?: { nivelDificultad?: string; formatoDestino?: string },
+  ): string {
+    let instruccionAjuste = '';
+
+    switch (tipoAjuste) {
+      case 'CAMBIO_DIFICULTAD': {
+        const nivel = parametros?.nivelDificultad || 'MEDIO';
+        if (nivel === 'FACIL') {
+          instruccionAjuste = `TIPO DE AJUSTE: CAMBIO DE DIFICULTAD A NIVEL FÁCIL
+- Reformula la consigna para que sea más accesible y fácil de resolver.
+- Simplifica el vocabulario y la complejidad de la redacción.
+- Reduce la cantidad de pasos de razonamiento, cálculo o deducción requeridos.
+- Si es pertinente, añade contexto aclaratorio o pistas orientadoras en el enunciado.
+- Ajusta la 'respuestaEsperada' reflejando la resolución simplificada.`;
+        } else if (nivel === 'DIFICIL') {
+          instruccionAjuste = `TIPO DE AJUSTE: CAMBIO DE DIFICULTAD A NIVEL DIFÍCIL
+- Reformula la consigna para que sea más compleja, desafiante y rigurosa.
+- Exige mayor profundidad de análisis, juicio crítico o justificación exhaustiva.
+- Combina múltiples conceptos o añade pasos de razonamiento o resolución avanzados.
+- Ajusta la 'respuestaEsperada' detallando la respuesta de nivel avanzado esperada.`;
+        } else {
+          instruccionAjuste = `TIPO DE AJUSTE: CAMBIO DE DIFICULTAD A NIVEL MEDIO
+- Reformula la consigna para que tenga un nivel de dificultad intermedio y equilibrado.
+- Equilibra los conceptos teóricos con aplicación práctica de complejidad moderada.
+- Ajusta la 'respuestaEsperada' con los criterios y pasos estándar de resolución.`;
+        }
+        break;
+      }
+      case 'CAMBIO_FORMATO': {
+        const formato = parametros?.formatoDestino || 'MULTIPLE_CHOICE';
+        if (formato === 'MULTIPLE_CHOICE') {
+          instruccionAjuste = `TIPO DE AJUSTE: CAMBIO DE FORMATO A OPCIÓN MÚLTIPLE (MULTIPLE CHOICE)
+- Reformatea la consigna para que sea una pregunta con 4 opciones claramente diferenciadas identificadas con letras (A, B, C, D), donde exactamente UNA sola opción sea la correcta y las otras tres sean distractores verosímiles pero incorrectos.
+- Incluye las 4 opciones dentro del campo 'enunciado'.
+- En 'respuestaEsperada', indica explícitamente cuál es la opción correcta (ej. "Opción B") y proporciona una justificación concisa del porqué.`;
+        } else if (formato === 'VERDADERO_FALSO') {
+          instruccionAjuste = `TIPO DE AJUSTE: CAMBIO DE FORMATO A VERDADERO O FALSO
+- Reformatea la consigna como una afirmación o proposición clara para que el alumno determine si es Verdadera o Falsa y deba justificar su respuesta.
+- En 'respuestaEsperada', indica con claridad el valor de verdad (Verdadero o Falso) y la fundamentación conceptual completa.`;
+        } else {
+          instruccionAjuste = `TIPO DE AJUSTE: CAMBIO DE FORMATO A PREGUNTA DE DESARROLLO / ABIERTA
+- Reformatea la consigna como una pregunta abierta o de desarrollo que requiera explicación conceptual, desarrollo algebraico/lógico o fundamentación paso a paso.
+- En 'respuestaEsperada', detalla los puntos clave, demostración o pasos esenciales que debe contener la respuesta modelo del estudiante.`;
+        }
+        break;
+      }
+      case 'REFRASEO':
+      default: {
+        instruccionAjuste = `TIPO DE AJUSTE: REFRASEO
+- Reescribe el enunciado con una redacción completamente renovada y fresca, utilizando otras palabras o sinónimos.
+- Mantén estrictamente el mismo nivel de dificultad, el mismo contenido pedagógico evaluado y el mismo formato de respuesta.
+- Adapta la 'respuestaEsperada' si es necesario para mantener coherencia total con la nueva redacción del enunciado.`;
+        break;
+      }
+    }
+
+    return `Actúa como un profesor y diseñador pedagógico experto en evaluación educativa.
+Tu tarea es modificar o adaptar una pregunta de examen según las instrucciones de ajuste especificadas a continuación.
+
+PREGUNTA ORIGINAL:
+- Enunciado actual: "${pregunta.enunciado}"
+- Respuesta esperada actual: "${pregunta.respuestaEsperada}"
+- Puntaje asignado: ${pregunta.puntajeMaximo} puntos
+${pregunta.criteriosIA ? `- Criterios adicionales: ${pregunta.criteriosIA}` : ''}
+- Evaluación visual previa: ${pregunta.esEvaluacionVisual ? 'Sí' : 'No'}
+
+INSTRUCCIÓN DE AJUSTE PEDIDO:
+${instruccionAjuste}
+
+REGLAS PARA EVALUACIÓN VISUAL:
+- "esEvaluacionVisual": Booleano (true o false obligatoriamente). Marca 'true' ÚNICAMENTE si la resolución de la nueva consigna exige de manera indispensable un gráfico cartesiano, dibujo, esquema anatómico, diagrama o construcción geométrica que requiera inspección visual humana. Si la respuesta puede expresarse en texto, números, opciones o fórmulas estándar, debe ser 'false'.
+
+REGLAS DE FORMATO ESTRICTO:
+Debes responder EXCLUSIVAMENTE un objeto JSON válido con la siguiente estructura exacta. No incluyas bloques de código markdown (\`\`\`json ... \`\`\`), ni introducciones, notas o texto aclaratorio antes o después del JSON:
+
+{
+  "enunciado": "Nuevo texto de la consigna según el ajuste solicitado",
+  "respuestaEsperada": "Nueva respuesta modelo o criterios esperados",
+  "esEvaluacionVisual": false
+}`;
   }
 
   /**
