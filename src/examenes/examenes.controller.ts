@@ -46,6 +46,14 @@ export class ExamenesController {
   }
 
   /**
+   * Obtiene las métricas y diagnóstico pedagógico de un examen.
+   */
+  @Get(':id/metricas')
+  async getMetricasExamen(@Param('id') id: string) {
+    return this.examenesService.getMetricasExamen(id);
+  }
+
+  /**
    * Obtiene el detalle de un examen específico con sus preguntas y el curso con sus alumnos anidados.
    */
   @Get(':id')

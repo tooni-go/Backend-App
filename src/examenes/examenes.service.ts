@@ -127,4 +127,139 @@ export class ExamenesService {
       parametros: dto.parametros,
     };
   }
+
+  /**
+   * Obtiene las métricas y diagnóstico pedagógico de un examen.
+   */
+  async getMetricasExamen(id: string) {
+    const examen = await this.prisma.examen.findUnique({
+      where: { id },
+      include: {
+        preguntas: true,
+        curso: {
+          include: {
+            alumnos: true,
+          },
+        },
+        entregas: {
+          include: {
+            correccion: true,
+          },
+        },
+      },
+    });
+
+    if (!examen) {
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    }
+
+    const round1 = (num: number) => Math.round(num * 10) / 10;
+
+    const totalAlumnos = examen.curso?.alumnos?.length ?? 0;
+    const preguntas = examen.preguntas || [];
+    const puntajeTotalExamen = round1(
+      preguntas.reduce((sum, p) => sum + (p.puntajeMaximo || 0), 0),
+    );
+
+    const entregasPublicadasList = (examen.entregas || []).filter(
+      (e) => e.estado === 'PUBLICADO',
+    );
+    const entregasPublicadas = entregasPublicadasList.length;
+
+    const notasValidas = entregasPublicadasList
+      .map((e) => e.correccion?.notaFinal)
+      .filter((nota): nota is number => typeof nota === 'number' && !isNaN(nota));
+
+    let notaPromedio: number | null = null;
+    let notaMaxima: number | null = null;
+    let notaMinima: number | null = null;
+    let porcentajeAprobacion: number | null = null;
+
+    if (notasValidas.length > 0) {
+      const sumaNotas = notasValidas.reduce((sum, n) => sum + n, 0);
+      notaPromedio = round1(sumaNotas / notasValidas.length);
+      notaMaxima = round1(Math.max(...notasValidas));
+      notaMinima = round1(Math.min(...notasValidas));
+
+      const umbralAprobacion = 0.6 * puntajeTotalExamen;
+      const aprobados = notasValidas.filter((nota) => nota >= umbralAprobacion).length;
+      porcentajeAprobacion = round1((aprobados / notasValidas.length) * 100);
+    }
+
+    const diagnosticoPorPregunta = preguntas.map((pregunta) => {
+      const puntajes: number[] = [];
+
+      if (entregasPublicadas > 0) {
+        for (const entrega of entregasPublicadasList) {
+          if (!entrega.correccion?.feedbackJSON) continue;
+          try {
+            const parsed = JSON.parse(entrega.correccion.feedbackJSON);
+            let items: any[] = [];
+            if (Array.isArray(parsed)) {
+              items = parsed;
+            } else if (parsed && Array.isArray(parsed.preguntas)) {
+              items = parsed.preguntas;
+            } else if (parsed && typeof parsed === 'object') {
+              items = Object.values(parsed);
+            }
+
+            const match = items.find(
+              (item) => item && (item.preguntaId === pregunta.id || item.id === pregunta.id),
+            );
+
+            if (
+              match &&
+              typeof match.puntajeObtenido === 'number' &&
+              !isNaN(match.puntajeObtenido)
+            ) {
+              puntajes.push(match.puntajeObtenido);
+            }
+          } catch {
+            // Skipear silenciosamente errores de parseo
+          }
+        }
+      }
+
+      if (puntajes.length === 0) {
+        return {
+          preguntaId: pregunta.id,
+          enunciado: pregunta.enunciado,
+          puntajeMaximo: round1(pregunta.puntajeMaximo),
+          promedioObtenido: null,
+          porcentajeAcierto: null,
+          porcentajeError: null,
+        };
+      }
+
+      const suma = puntajes.reduce((acc, val) => acc + val, 0);
+      const promedioObtenido = round1(suma / puntajes.length);
+      const porcentajeAcierto =
+        pregunta.puntajeMaximo > 0
+          ? round1((promedioObtenido / pregunta.puntajeMaximo) * 100)
+          : 0;
+      const porcentajeError = round1(100 - porcentajeAcierto);
+
+      return {
+        preguntaId: pregunta.id,
+        enunciado: pregunta.enunciado,
+        puntajeMaximo: round1(pregunta.puntajeMaximo),
+        promedioObtenido,
+        porcentajeAcierto,
+        porcentajeError,
+      };
+    });
+
+    return {
+      examenId: examen.id,
+      titulo: examen.titulo,
+      totalAlumnos,
+      entregasPublicadas,
+      notaPromedio,
+      notaMaxima,
+      notaMinima,
+      porcentajeAprobacion,
+      puntajeTotalExamen,
+      diagnosticoPorPregunta,
+    };
+  }
 }

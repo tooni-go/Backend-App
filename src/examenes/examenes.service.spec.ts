@@ -282,5 +282,256 @@ describe('ExamenesService - regenerarPregunta', () => {
       expect(response.sugerencia.enunciado).toBe('Consigna regenerada desde memoria.');
     });
   });
+
+  describe('getMetricasExamen', () => {
+    it('debe lanzar NotFoundException si el examen no existe', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValue(null);
+
+      await expect(service.getMetricasExamen('no-existe')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.getMetricasExamen('no-existe')).rejects.toThrow(
+        'Examen con ID no-existe no encontrado.',
+      );
+    });
+
+    it('debe retornar métricas con nulls cuando no hay entregas publicadas', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValue({
+        id: 'ex-1',
+        titulo: 'Examen Sin Entregas',
+        curso: {
+          alumnos: [
+            { alumnoId: 'a-1' },
+            { alumnoId: 'a-2' },
+            { alumnoId: 'a-3' },
+          ],
+        },
+        preguntas: [
+          {
+            id: 'p-1',
+            enunciado: 'Pregunta 1',
+            puntajeMaximo: 5,
+          },
+          {
+            id: 'p-2',
+            enunciado: 'Pregunta 2',
+            puntajeMaximo: 5,
+          },
+        ],
+        entregas: [
+          {
+            estado: 'PENDIENTE',
+            alumnoId: 'a-1',
+            correccion: null,
+          },
+          {
+            estado: 'PROCESANDO',
+            alumnoId: 'a-2',
+            correccion: { notaFinal: 8, feedbackJSON: null },
+          },
+        ],
+      });
+
+      const result = await service.getMetricasExamen('ex-1');
+
+      expect(result).toEqual({
+        examenId: 'ex-1',
+        titulo: 'Examen Sin Entregas',
+        totalAlumnos: 3,
+        entregasPublicadas: 0,
+        notaPromedio: null,
+        notaMaxima: null,
+        notaMinima: null,
+        porcentajeAprobacion: null,
+        puntajeTotalExamen: 10,
+        diagnosticoPorPregunta: [
+          {
+            preguntaId: 'p-1',
+            enunciado: 'Pregunta 1',
+            puntajeMaximo: 5,
+            promedioObtenido: null,
+            porcentajeAcierto: null,
+            porcentajeError: null,
+          },
+          {
+            preguntaId: 'p-2',
+            enunciado: 'Pregunta 2',
+            puntajeMaximo: 5,
+            promedioObtenido: null,
+            porcentajeAcierto: null,
+            porcentajeError: null,
+          },
+        ],
+      });
+    });
+
+    it('debe calcular correctamente el promedio, máxima, mínima y porcentaje de aprobación', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValue({
+        id: 'ex-1',
+        titulo: 'Examen de Matemáticas',
+        curso: {
+          alumnos: [
+            { alumnoId: 'a-1' },
+            { alumnoId: 'a-2' },
+            { alumnoId: 'a-3' },
+            { alumnoId: 'a-4' },
+            { alumnoId: 'a-5' },
+          ],
+        },
+        preguntas: [
+          { id: 'p-1', enunciado: 'P1', puntajeMaximo: 5 },
+          { id: 'p-2', enunciado: 'P2', puntajeMaximo: 5 },
+        ],
+        entregas: [
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-1',
+            correccion: { notaFinal: 8, feedbackJSON: '[]' },
+          },
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-2',
+            correccion: { notaFinal: 4, feedbackJSON: '[]' },
+          },
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-3',
+            correccion: { notaFinal: 9, feedbackJSON: '[]' },
+          },
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-4',
+            correccion: { notaFinal: 7, feedbackJSON: '[]' },
+          },
+          {
+            estado: 'PENDIENTE',
+            alumnoId: 'a-5',
+            correccion: { notaFinal: 10, feedbackJSON: '[]' },
+          },
+        ],
+      });
+
+      const result = await service.getMetricasExamen('ex-1');
+
+      expect(result.examenId).toBe('ex-1');
+      expect(result.totalAlumnos).toBe(5);
+      expect(result.entregasPublicadas).toBe(4);
+      expect(result.notaPromedio).toBe(7);
+      expect(result.notaMaxima).toBe(9);
+      expect(result.notaMinima).toBe(4);
+      expect(result.porcentajeAprobacion).toBe(75);
+      expect(result.puntajeTotalExamen).toBe(10);
+    });
+
+    it('debe calcular el diagnóstico por pregunta parseando feedbackJSON correctamente', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValue({
+        id: 'ex-1',
+        titulo: 'Examen Diagnóstico',
+        curso: { alumnos: [{ alumnoId: 'a-1' }, { alumnoId: 'a-2' }] },
+        preguntas: [
+          { id: 'p-1', enunciado: 'Derivada de x^2', puntajeMaximo: 2.5 },
+          { id: 'p-2', enunciado: 'Integral de 2x', puntajeMaximo: 7.5 },
+        ],
+        entregas: [
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-1',
+            correccion: {
+              notaFinal: 8,
+              feedbackJSON: JSON.stringify([
+                { preguntaId: 'p-1', puntajeObtenido: 2.0 },
+                { preguntaId: 'p-2', puntajeObtenido: 6.0 },
+              ]),
+            },
+          },
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-2',
+            correccion: {
+              notaFinal: 7,
+              feedbackJSON: JSON.stringify([
+                { preguntaId: 'p-1', puntajeObtenido: 1.6 },
+                { preguntaId: 'p-2', puntajeObtenido: 5.4 },
+              ]),
+            },
+          },
+        ],
+      });
+
+      const result = await service.getMetricasExamen('ex-1');
+
+      expect(result.diagnosticoPorPregunta).toEqual([
+        {
+          preguntaId: 'p-1',
+          enunciado: 'Derivada de x^2',
+          puntajeMaximo: 2.5,
+          promedioObtenido: 1.8,
+          porcentajeAcierto: 72,
+          porcentajeError: 28,
+        },
+        {
+          preguntaId: 'p-2',
+          enunciado: 'Integral de 2x',
+          puntajeMaximo: 7.5,
+          promedioObtenido: 5.7,
+          porcentajeAcierto: 76,
+          porcentajeError: 24,
+        },
+      ]);
+    });
+
+    it('debe skipear silenciosamente preguntas sin datos en feedbackJSON', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValue({
+        id: 'ex-1',
+        titulo: 'Examen con Datos Faltantes',
+        curso: { alumnos: [{ alumnoId: 'a-1' }, { alumnoId: 'a-2' }] },
+        preguntas: [
+          { id: 'p-1', enunciado: 'Pregunta con datos', puntajeMaximo: 5 },
+          { id: 'p-2', enunciado: 'Pregunta sin datos', puntajeMaximo: 5 },
+        ],
+        entregas: [
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-1',
+            correccion: {
+              notaFinal: 5,
+              feedbackJSON: 'JSON_INVALIDO_O_CORRUPTO',
+            },
+          },
+          {
+            estado: 'PUBLICADO',
+            alumnoId: 'a-2',
+            correccion: {
+              notaFinal: 5,
+              feedbackJSON: JSON.stringify([
+                { preguntaId: 'p-1', puntajeObtenido: 4 },
+              ]),
+            },
+          },
+        ],
+      });
+
+      const result = await service.getMetricasExamen('ex-1');
+
+      expect(result.diagnosticoPorPregunta).toEqual([
+        {
+          preguntaId: 'p-1',
+          enunciado: 'Pregunta con datos',
+          puntajeMaximo: 5,
+          promedioObtenido: 4,
+          porcentajeAcierto: 80,
+          porcentajeError: 20,
+        },
+        {
+          preguntaId: 'p-2',
+          enunciado: 'Pregunta sin datos',
+          puntajeMaximo: 5,
+          promedioObtenido: null,
+          porcentajeAcierto: null,
+          porcentajeError: null,
+        },
+      ]);
+    });
+  });
 });
 
