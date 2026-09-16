@@ -10,6 +10,9 @@ jobs:
   lint-and-build:
     name: Lint, Test & Build
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci_db"
+      JWT_SECRET: "ci-secret-key-123456"
 
     steps:
       - name: Checkout repository

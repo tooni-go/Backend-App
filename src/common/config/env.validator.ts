@@ -27,7 +27,7 @@ export function validateEnvConfig(): EnvValidationResult {
   }
 
   // 1. Validación de Autenticación / JWT
-  let jwtSecret = process.env.JWT_SECRET;
+  const jwtSecret = process.env.JWT_SECRET;
   if (!jwtSecret) {
     process.env.JWT_SECRET = 'evalia-default-secret-jwt-key-2026';
     warnings.push(
