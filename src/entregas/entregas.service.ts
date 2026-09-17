@@ -86,6 +86,12 @@ export class EntregasService {
       throw new NotFoundException(`Examen con ID ${examId} no encontrado.`);
     }
 
+    if (examen.estado !== 'PUBLICADO') {
+      throw new BadRequestException(
+        'No se pueden subir entregas a un examen en estado BORRADOR o ARCHIVADO.',
+      );
+    }
+
     const alumno = await this.prisma.alumno.findUnique({
       where: { id: alumnoId },
     });

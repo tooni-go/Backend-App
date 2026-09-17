@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Param,
   Body,
@@ -11,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService, UpdateExamenDto } from './examenes.service';
+import { UpdateEstadoExamenDto } from './dto/update-estado-examen.dto';
 import { GeneratedExam } from '../ai/ai.service';
 import {
   ApiTags,
@@ -50,6 +52,31 @@ export class ExamenesController {
   @ApiParam({ name: 'id', description: 'ID del examen' })
   async updateExamen(@Param('id') id: string, @Body() body: UpdateExamenDto) {
     return this.examenesService.updateExamen(id, body);
+  }
+
+  @Patch(':id/estado')
+  @ApiOperation({
+    summary: 'Actualizar el estado del examen (BORRADOR, PUBLICADO, ARCHIVADO)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del examen' })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado del examen actualizado exitosamente.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'No se puede publicar un examen sin preguntas o estado inválido.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Examen no encontrado.',
+  })
+  async updateEstado(
+    @Param('id') id: string,
+    @Body() body: UpdateEstadoExamenDto,
+  ) {
+    return this.examenesService.updateEstado(id, body.estado);
   }
 
   @Delete(':id')

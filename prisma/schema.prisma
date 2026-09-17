@@ -51,15 +51,22 @@ model AlumnoCurso {
   @@map("_AlumnoToCurso")
 }
 
+enum EstadoExamen {
+  BORRADOR
+  PUBLICADO
+  ARCHIVADO
+}
+
 model Examen {
-  id        String     @id @default(uuid())
-  titulo    String
-  fecha     DateTime   @default(now())
-  puntajeTotal Float      @default(10)
-  cursoId   String
-  curso     Curso      @relation(fields: [cursoId], references: [id])
-  preguntas Pregunta[]
-  entregas  Entrega[]
+  id           String       @id @default(uuid())
+  titulo       String
+  fecha        DateTime     @default(now())
+  puntajeTotal Float        @default(10)
+  estado       EstadoExamen @default(BORRADOR)
+  cursoId      String
+  curso        Curso        @relation(fields: [cursoId], references: [id])
+  preguntas    Pregunta[]
+  entregas     Entrega[]
 }
 
 model Pregunta {
