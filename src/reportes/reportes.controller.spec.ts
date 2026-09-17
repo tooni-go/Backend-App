@@ -24,7 +24,12 @@ describe('ReportesController (HTTP Endpoints)', () => {
         id: 'ent-1',
         alumnoId: 'a1',
         estado: 'PUBLICADO',
-        alumno: { id: 'a1', legajo: 'L-101', nombre: 'Juan', apellido: 'Pérez' },
+        alumno: {
+          id: 'a1',
+          legajo: 'L-101',
+          nombre: 'Juan',
+          apellido: 'Pérez',
+        },
         correccion: {
           notaFinal: 9.5,
           nivelConfianza: 'ALTO',
@@ -43,23 +48,32 @@ describe('ReportesController (HTTP Endpoints)', () => {
     examenes: [mockExamen],
     alumnos: [
       {
-        alumno: { id: 'a1', legajo: 'L-101', nombre: 'Juan', apellido: 'Pérez' },
+        alumno: {
+          id: 'a1',
+          legajo: 'L-101',
+          nombre: 'Juan',
+          apellido: 'Pérez',
+        },
       },
     ],
   };
 
   const mockPrismaService = {
     examen: {
-      findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) => {
-        if (where.id === 'exam-123') return Promise.resolve(mockExamen);
-        return Promise.resolve(null);
-      }),
+      findUnique: jest
+        .fn()
+        .mockImplementation(({ where }: { where: { id: string } }) => {
+          if (where.id === 'exam-123') return Promise.resolve(mockExamen);
+          return Promise.resolve(null);
+        }),
     },
     curso: {
-      findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) => {
-        if (where.id === 'curso-123') return Promise.resolve(mockCurso);
-        return Promise.resolve(null);
-      }),
+      findUnique: jest
+        .fn()
+        .mockImplementation(({ where }: { where: { id: string } }) => {
+          if (where.id === 'curso-123') return Promise.resolve(mockCurso);
+          return Promise.resolve(null);
+        }),
     },
   };
 

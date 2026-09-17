@@ -22,7 +22,9 @@ describe('AiResilienceService - Fallback, Clasificación de Errores y Métricas'
 
   describe('Clasificación Explícita de Fallos (classifyAiError)', () => {
     it('clasifica error 429 como RATE_LIMIT', () => {
-      const error = new Error('HTTP 429 Too Many Requests: Rate limit exceeded');
+      const error = new Error(
+        'HTTP 429 Too Many Requests: Rate limit exceeded',
+      );
       const classified = service.classifyAiError(error);
       expect(classified.tipo).toBe('RATE_LIMIT');
       expect(classified.statusCode).toBe(429);
@@ -41,13 +43,17 @@ describe('AiResilienceService - Fallback, Clasificación de Errores y Métricas'
       const classified503 = service.classifyAiError(error503);
       expect(classified503.tipo).toBe('SERVER_ERROR');
 
-      const error502 = new Error('OpenRouter API respondió con estado 502: Bad Gateway');
+      const error502 = new Error(
+        'OpenRouter API respondió con estado 502: Bad Gateway',
+      );
       const classified502 = service.classifyAiError(error502);
       expect(classified502.tipo).toBe('SERVER_ERROR');
     });
 
     it('clasifica errores de tiempo excedido como TIMEOUT', () => {
-      const timeoutError = new Error('Timeout de 30 segundos en Gemini API alcanzado');
+      const timeoutError = new Error(
+        'Timeout de 30 segundos en Gemini API alcanzado',
+      );
       const classified = service.classifyAiError(timeoutError);
       expect(classified.tipo).toBe('TIMEOUT');
       expect(classified.statusCode).toBe(408);
@@ -60,7 +66,9 @@ describe('AiResilienceService - Fallback, Clasificación de Errores y Métricas'
     });
 
     it('clasifica errores de esquema o JSON como VALIDATION_ERROR', () => {
-      const valError = new Error('El JSON generado no cumple con el esquema requerido');
+      const valError = new Error(
+        'El JSON generado no cumple con el esquema requerido',
+      );
       const classified = service.classifyAiError(valError);
       expect(classified.tipo).toBe('VALIDATION_ERROR');
       expect(classified.statusCode).toBe(422);
@@ -69,7 +77,9 @@ describe('AiResilienceService - Fallback, Clasificación de Errores y Métricas'
 
   describe('Flujo de Fallback y Resiliencia (callWithFallback)', () => {
     it('retorna resultado de Gemini directamente si la llamada es exitosa', async () => {
-      const geminiCall = jest.fn().mockResolvedValue('Resultado exitoso de Gemini');
+      const geminiCall = jest
+        .fn()
+        .mockResolvedValue('Resultado exitoso de Gemini');
       const openRouterCall = jest.fn();
 
       const result = await service.callWithFallback({
@@ -213,7 +223,9 @@ describe('AiResilienceService - Fallback, Clasificación de Errores y Métricas'
 
     it('cancela por timeout si la operación excede el tiempo estipulado', async () => {
       const slowOp = () =>
-        new Promise<string>((resolve) => setTimeout(() => resolve('tarde'), 200));
+        new Promise<string>((resolve) =>
+          setTimeout(() => resolve('tarde'), 200),
+        );
 
       await expect(
         service.executeWithTimeout(slowOp, 50, 'Prueba de Timeout'),

@@ -537,7 +537,7 @@ export class ReportesService {
         'Confianza IA',
         'Fecha Aprob.',
       ];
-      const columnWidths = [135, 155, 80, 80, 65]; // total = 515
+      const columnWidths = [135, 155, 80, 80, 65]; // total = 515 — legajo ancho para no cortar
       const startX = 40;
       let currentY = doc.y;
 
@@ -641,6 +641,7 @@ export class ReportesService {
     );
 
     const buffer = await new Promise<Buffer>((resolve, reject) => {
+      // Usar Landscape (apaisado) para permitir más columnas de exámenes
       const doc = new PDFDocument({
         margin: 40,
         size: 'A4',

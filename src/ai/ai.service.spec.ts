@@ -201,7 +201,6 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
             enunciado: 'Pregunta sin criterios',
             respuestaEsperada: 'Respuesta modelo',
             puntajeMaximo: 10,
-            // Falta criteriosIA
             esEvaluacionVisual: false,
           },
         ],
@@ -361,9 +360,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
           new Error('OpenRouter API respondió con estado 502: Bad Gateway'),
         );
 
-      await expect(
-        service.generateExam({ texto: 'Consigna' }),
-      ).rejects.toThrow(InternalServerErrorException);
+      await expect(service.generateExam({ texto: 'Consigna' })).rejects.toThrow(
+        InternalServerErrorException,
+      );
 
       expect(logFallbackSpy).toHaveBeenCalledTimes(2);
       expect(logFallbackSpy).toHaveBeenNthCalledWith(
@@ -465,7 +464,8 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       } finally {
         if (originalKey !== undefined) process.env.GEMINI_API_KEY = originalKey;
         else delete process.env.GEMINI_API_KEY;
-        if (originalModel !== undefined) process.env.GEMINI_MODEL = originalModel;
+        if (originalModel !== undefined)
+          process.env.GEMINI_MODEL = originalModel;
         else delete process.env.GEMINI_MODEL;
       }
     });
@@ -485,7 +485,8 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       } finally {
         if (originalKey !== undefined) process.env.GEMINI_API_KEY = originalKey;
         else delete process.env.GEMINI_API_KEY;
-        if (originalModel !== undefined) process.env.GEMINI_MODEL = originalModel;
+        if (originalModel !== undefined)
+          process.env.GEMINI_MODEL = originalModel;
         else delete process.env.GEMINI_MODEL;
       }
     });
@@ -568,9 +569,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
       // Cambiar dinámicamente el modelo a Claude 3.5 Sonnet
       service.setActiveOpenRouterModel('anthropic/claude-3.5-sonnet');
 
-      const mockGenerateContent = jest.fn().mockRejectedValue(
-        new Error('Gemini Unavailable'),
-      );
+      const mockGenerateContent = jest
+        .fn()
+        .mockRejectedValue(new Error('Gemini Unavailable'));
 
       (GoogleGenAI as unknown as jest.Mock).mockImplementation(() => ({
         models: {
@@ -593,8 +594,9 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
 
       let capturedRequestBody: any = null;
       const originalFetch = global.fetch;
-      global.fetch = jest.fn().mockImplementation(
-        async (url: string, init: any) => {
+      global.fetch = jest
+        .fn()
+        .mockImplementation(async (url: string, init: any) => {
           capturedRequestBody = JSON.parse(init.body);
           return {
             ok: true,
@@ -604,8 +606,7 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
               ],
             }),
           };
-        },
-      ) as any;
+        }) as any;
 
       try {
         await service.generateExam({ texto: 'Generar examen con fallback' });

@@ -101,7 +101,9 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
         service.createEntrega('exam-inexistente', 'alumno-1', mockFile),
       ).rejects.toThrow(NotFoundException);
 
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce({ id: 'exam-1' });
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+        id: 'exam-1',
+      });
       mockPrismaService.alumno.findUnique.mockResolvedValueOnce(null);
 
       await expect(
@@ -124,7 +126,11 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
         .spyOn(service as any, 'processCorrectionBackground')
         .mockResolvedValue(undefined);
 
-      const result = await service.createEntrega('exam-1', 'alumno-1', mockFile);
+      const result = await service.createEntrega(
+        'exam-1',
+        'alumno-1',
+        mockFile,
+      );
 
       expect(result).toBeDefined();
       expect(result.id).toBe('entrega-123');
@@ -163,7 +169,9 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
     };
 
     it('procesa corrección exitosa: cambia a PROCESANDO, llama a AiService, guarda corrección y actualiza a PENDIENTE_APROBACION', async () => {
-      mockPrismaService.entrega.findUnique.mockResolvedValue(mockEntregaConExamen);
+      mockPrismaService.entrega.findUnique.mockResolvedValue(
+        mockEntregaConExamen,
+      );
       mockPrismaService.entrega.update.mockResolvedValue({});
       mockPrismaService.correccion.upsert.mockResolvedValue({});
 
@@ -237,7 +245,9 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
     });
 
     it('asigna REQUIERE_REVISION si la corrección de IA falla o lanza un error catastrófico', async () => {
-      mockPrismaService.entrega.findUnique.mockResolvedValue(mockEntregaConExamen);
+      mockPrismaService.entrega.findUnique.mockResolvedValue(
+        mockEntregaConExamen,
+      );
       mockPrismaService.entrega.update.mockResolvedValue({});
 
       mockAiService.evaluateSubmission.mockRejectedValue(
@@ -269,7 +279,11 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
         estado: 'PUBLICADO',
       });
 
-      const result = await service.approveEntrega('entrega-123', 9, 'Excelente');
+      const result = await service.approveEntrega(
+        'entrega-123',
+        9,
+        'Excelente',
+      );
 
       expect(mockPrismaService.correccion.update).toHaveBeenCalledWith({
         where: { id: 'corr-1' },

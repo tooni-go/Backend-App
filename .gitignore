@@ -1,10 +1,32 @@
-node_modules
-# Keep environment variables out of version control
-.env
+# Dependencies
+node_modules/
 
+# Environment variables & secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# Build artifacts & generators
 /generated/prisma
 /dist
+*.tsbuildinfo
+
+# Uploads & local SQLite files
 /uploads
 *.db
 *.db-journal
-*.tsbuildinfo
+
+# Logs & temp files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE & AI tooling
+.claude/
+.windsurf/
+.vscode/
+.idea/

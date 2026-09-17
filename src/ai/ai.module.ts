@@ -9,4 +9,3 @@ import { AiController } from './ai.controller';
   exports: [AiService, AiResilienceService],
 })
 export class AiModule {}
-
