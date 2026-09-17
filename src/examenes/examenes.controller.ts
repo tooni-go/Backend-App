@@ -8,10 +8,13 @@ import {
   Body,
   UploadedFile,
   UseInterceptors,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService, UpdateExamenDto } from './examenes.service';
 import { GeneratedExam } from '../ai/ai.service';
+import { RegenerarPreguntaDto } from './dto/regenerar-pregunta.dto';
 import {
   ApiTags,
   ApiOperation,
@@ -37,6 +40,30 @@ export class ExamenesController {
   ): Promise<GeneratedExam> {
     const texto = textoFromForm || bodyJson?.texto;
     return this.examenesService.generateExam({ texto, file });
+  }
+
+  /**
+   * Endpoint de regeneración atómica de una consigna individual con IA.
+   */
+  @Post('preguntas/regenerar-individual')
+  @ApiOperation({
+    summary: 'Regeneración atómica de una consigna individual con IA',
+  })
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+  async regenerarPregunta(@Body() dto: RegenerarPreguntaDto) {
+    return this.examenesService.regenerarPregunta(dto);
+  }
+
+  /**
+   * Obtiene las métricas y diagnóstico pedagógico de un examen.
+   */
+  @Get(':id/metricas')
+  @ApiOperation({
+    summary: 'Obtiene las métricas y diagnóstico pedagógico de un examen',
+  })
+  @ApiParam({ name: 'id', description: 'ID del examen' })
+  async getMetricasExamen(@Param('id') id: string) {
+    return this.examenesService.getMetricasExamen(id);
   }
 
   @Get(':id')

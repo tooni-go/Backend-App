@@ -18,7 +18,25 @@ export class UpdateProfesorDto {
 
 @Injectable()
 export class ProfesorService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Obtiene o crea el profesor por defecto para entorno local/seed.
+   */
+  async getOrCreateDefaultProfesor() {
+    let profesor = await this.prisma.profesor.findFirst();
+    if (!profesor) {
+      profesor = await this.prisma.profesor.create({
+        data: {
+          nombre: 'Profesor',
+          apellido: 'Titular',
+          email: 'profesor@evalia.com',
+          googleId: 'default-google-id',
+        },
+      });
+    }
+    return profesor;
+  }
 
   async getProfile(id: string) {
     const profesor = await this.prisma.profesor.findUnique({ where: { id } });

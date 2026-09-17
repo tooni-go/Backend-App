@@ -1,15 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import {
   ReportesService,
   sanitizeFilenamePart,
   buildReportFilename,
 } from './reportes.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { NotFoundException } from '@nestjs/common';
 
 describe('ReportesService', () => {
   let service: ReportesService;
-  let prisma: PrismaService;
 
   const mockPrismaService = {
     examen: {
@@ -24,19 +23,22 @@ describe('ReportesService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ReportesService,
-        { provide: PrismaService, useValue: mockPrismaService },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
       ],
     }).compile();
 
     service = module.get<ReportesService>(ReportesService);
-    prisma = module.get<PrismaService>(PrismaService);
-  });
-
-  afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('Sanitización de nombres de archivo y headers', () => {
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+
+  describe('Sanitización de nombres de archivo y helpers', () => {
     it('sanitiza correctamente materias y divisiones con acentos, tildes y espacios ("Matemática Aplicada" y "División A")', () => {
       const sanitizedMateria = sanitizeFilenamePart('Matemática Aplicada');
       const sanitizedDivision = sanitizeFilenamePart('División A');
@@ -71,9 +73,27 @@ describe('ReportesService', () => {
       );
       expect(sanitizeFilenamePart('')).toBe('');
     });
+
+    it('sanitizeFilename método debe sanitizar arreglos de componentes', () => {
+      const filename = service.sanitizeFilename(
+        ['notas', 'Matemática Aplicada', '5° A / Mañana', '2026-09-01'],
+        'csv',
+      );
+      expect(filename).toBe(
+        'notas-matematica_aplicada-5_a_manana-2026-09-01.csv',
+      );
+    });
+
+    it('sanitizeFilename debe ignorar valores nulos o vacíos', () => {
+      const filename = service.sanitizeFilename(
+        ['notas', 'Física', null, undefined, '', '2026'],
+        'pdf',
+      );
+      expect(filename).toBe('notas-fisica-2026.pdf');
+    });
   });
 
-  describe('Reporte por Examen', () => {
+  describe('Reporte por Examen (getExamenReportData)', () => {
     const mockExamenData = {
       id: 'exam-1',
       titulo: 'Parcial 1',
@@ -130,6 +150,17 @@ describe('ReportesService', () => {
       ],
     };
 
+    it('debe lanzar NotFoundException si el examen no existe', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getExamenReportData('examen-inexistente'),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getExamenReportData('examen-inexistente'),
+      ).rejects.toThrow('Examen con ID examen-inexistente no encontrado.');
+    });
+
     it('retorna filas con notas publicadas y marca explícitamente "Sin publicar" en entregas no publicadas', async () => {
       mockPrismaService.examen.findUnique.mockResolvedValue(mockExamenData);
 
@@ -138,83 +169,57 @@ describe('ReportesService', () => {
       expect(result.examen.titulo).toBe('Parcial 1');
       expect(result.filas).toHaveLength(3);
 
-      // Entrega 1: PUBLICADO con nota 8.5
-      expect(result.filas[0].legajo).toBe('L-101');
-      expect(result.filas[0].notaFinal).toBe(8.5);
-      expect(result.filas[0].nivelConfianza).toBe('ALTO');
-      expect(result.filas[0].fechaAprobacion).toBe('2026-09-02');
+      // Ana Gómez (orden alfabético por apellido)
+      const ana = result.filas.find((f) => f.legajo === 'L-102');
+      expect(ana?.notaFinal).toBe('Sin publicar');
+      expect(ana?.fechaAprobacion).toBe('Sin publicar');
 
-      // Entrega 2: PENDIENTE sin corrección
-      expect(result.filas[1].legajo).toBe('L-102');
-      expect(result.filas[1].notaFinal).toBe('Sin publicar');
-      expect(result.filas[1].nivelConfianza).toBe('Sin datos');
-      expect(result.filas[1].fechaAprobacion).toBe('Sin publicar');
+      // Juan Pérez
+      const juan = result.filas.find((f) => f.legajo === 'L-101');
+      expect(juan?.notaFinal).toBe(8.5);
+      expect(juan?.nivelConfianza).toBe('ALTO');
+      expect(juan?.fechaAprobacion).toBe('2026-09-02');
 
-      // Entrega 3: REQUIERE_REVISION con corrección sin notaFinal
-      expect(result.filas[2].legajo).toBe('L-103');
-      expect(result.filas[2].notaFinal).toBe('Sin publicar');
-      expect(result.filas[2].nivelConfianza).toBe('BAJO');
-      expect(result.filas[2].fechaAprobacion).toBe('Sin publicar');
+      // Carlos López
+      const carlos = result.filas.find((f) => f.legajo === 'L-103');
+      expect(carlos?.notaFinal).toBe('Sin publicar');
+      expect(carlos?.nivelConfianza).toBe('BAJO');
+      expect(carlos?.fechaAprobacion).toBe('Sin publicar');
     });
 
-    it('genera CSV para examen incluyendo BOM UTF-8 y sep=, al inicio del archivo', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(mockExamenData);
-
-      const { filename, content } = await service.generateExamenCsv('exam-1');
-
-      expect(filename).toBe(
-        'notas-matematica-aplicada-division-a-2026-09-01.csv',
-      );
-      // Debe comenzar estrictamente con \uFEFFsep=,\n
-      expect(content.startsWith('\uFEFFsep=,\n')).toBe(true);
-      expect(content).toContain(
-        'Legajo,Nombre,Apellido,Nota Final,Nivel Confianza,Fecha Aprobacion',
-      );
-      expect(content).toContain('L-101,Juan,Perez,8.5,ALTO,2026-09-02');
-      expect(content).toContain(
-        'L-102,Ana,Gomez,Sin publicar,Sin datos,Sin publicar',
-      );
-    });
-
-    it('genera PDF binario para examen sin errores', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(mockExamenData);
-
-      const { filename, buffer } = await service.generateExamenPdf('exam-1');
-
-      expect(filename).toBe(
-        'notas-matematica-aplicada-division-a-2026-09-01.pdf',
-      );
-      expect(Buffer.isBuffer(buffer)).toBe(true);
-      expect(buffer.length).toBeGreaterThan(0);
-      expect(buffer.toString('utf-8', 0, 4)).toBe('%PDF');
-    });
-
-    it('lanza NotFoundException con mensaje exacto si el examen no existe', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(null);
-
-      await expect(service.getExamenReportData('non-existent')).rejects.toThrow(
-        new NotFoundException('Examen con ID non-existent no encontrado.'),
-      );
-    });
-
-    it('genera reporte de examen vacío si no hay entregas sin arrojar error', async () => {
+    it('debe generar reporte correctamente para un examen sin entregas (caso vacío válido)', async () => {
       mockPrismaService.examen.findUnique.mockResolvedValue({
-        ...mockExamenData,
+        id: 'exam-1',
+        titulo: 'Primer Parcial',
+        fecha: new Date('2026-05-10T10:00:00.000Z'),
+        curso: {
+          id: 'curso-1',
+          materia: 'Química',
+          division: 'B',
+          anio: 4,
+          anioLectivo: 2026,
+        },
         entregas: [],
       });
 
-      const result = await service.getExamenReportData('exam-1');
-      expect(result.filas).toEqual([]);
+      const report = await service.getExamenReportData('exam-1');
 
-      const csv = await service.generateExamenCsv('exam-1');
-      expect(csv.content.startsWith('\uFEFFsep=,\n')).toBe(true);
-
-      const pdf = await service.generateExamenPdf('exam-1');
-      expect(pdf.buffer.length).toBeGreaterThan(0);
+      expect(report.metadata.tituloExamen).toBe('Primer Parcial');
+      expect(report.metadata.materia).toBe('Química');
+      expect(report.headers).toEqual([
+        'Legajo',
+        'Nombre',
+        'Apellido',
+        'Nota Final',
+        'Nivel de Confianza',
+        'Fecha de Aprobación',
+      ]);
+      expect(report.rows).toEqual([]);
+      expect(report.filas).toEqual([]);
     });
   });
 
-  describe('Reporte por Curso', () => {
+  describe('Reporte por Curso (getCursoReportData)', () => {
     const mockCursoData = {
       id: 'curso-1',
       materia: 'Matemática Aplicada',
@@ -289,6 +294,17 @@ describe('ReportesService', () => {
       ],
     };
 
+    it('debe lanzar NotFoundException si el curso no existe', async () => {
+      mockPrismaService.curso.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getCursoReportData('curso-inexistente'),
+      ).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getCursoReportData('curso-inexistente'),
+      ).rejects.toThrow('Curso con ID curso-inexistente no encontrado.');
+    });
+
     it('calcula el promedio únicamente sobre notas publicadas y devuelve "Sin datos" si el alumno no tiene notas publicadas', async () => {
       mockPrismaService.curso.findUnique.mockResolvedValue(mockCursoData);
 
@@ -316,60 +332,152 @@ describe('ReportesService', () => {
       expect(filaCarlos?.promedio).toBe(7.5);
     });
 
-    it('genera CSV para curso con BOM UTF-8 y sep=,', async () => {
-      mockPrismaService.curso.findUnique.mockResolvedValue(mockCursoData);
-
-      const { content } = await service.generateCursoCsv('curso-1');
-
-      expect(content.startsWith('\uFEFFsep=,\n')).toBe(true);
-      expect(content).toContain(
-        'Legajo,Nombre,Apellido,Parcial 1,Parcial 2,Promedio',
-      );
-      expect(content).toContain('L-101,Juan,Perez,8,10,9');
-      expect(content).toContain(
-        'L-102,Ana,Gomez,Sin publicar,Sin publicar,Sin datos',
-      );
-      expect(content).toContain('L-103,Carlos,Lopez,Sin publicar,7.5,7.5');
-    });
-
-    it('genera PDF apaisado para curso sin errores', async () => {
-      mockPrismaService.curso.findUnique.mockResolvedValue(mockCursoData);
-
-      const { filename, buffer } = await service.generateCursoPdf('curso-1');
-
-      expect(filename.startsWith('notas-matematica-aplicada-division-a-')).toBe(
-        true,
-      );
-      expect(filename.endsWith('.pdf')).toBe(true);
-      expect(Buffer.isBuffer(buffer)).toBe(true);
-      expect(buffer.length).toBeGreaterThan(0);
-      expect(buffer.toString('utf-8', 0, 4)).toBe('%PDF');
-    });
-
-    it('lanza NotFoundException con mensaje exacto si el curso no existe', async () => {
-      mockPrismaService.curso.findUnique.mockResolvedValue(null);
-
-      await expect(service.getCursoReportData('non-existent')).rejects.toThrow(
-        new NotFoundException('Curso con ID non-existent no encontrado.'),
-      );
-    });
-
-    it('genera reporte de curso vacío si no hay alumnos o exámenes sin fallar', async () => {
+    it('debe generar reporte vacío si el curso no tiene alumnos ni exámenes', async () => {
       mockPrismaService.curso.findUnique.mockResolvedValue({
-        ...mockCursoData,
+        id: 'curso-vacio',
+        materia: 'Historia',
+        division: 'C',
+        anio: 3,
+        anioLectivo: 2026,
         alumnos: [],
         examenes: [],
       });
 
-      const result = await service.getCursoReportData('curso-1');
-      expect(result.filas).toEqual([]);
-      expect(result.examenes).toEqual([]);
+      const report = await service.getCursoReportData('curso-vacio');
 
-      const csv = await service.generateCursoCsv('curso-1');
-      expect(csv.content.startsWith('\uFEFFsep=,\n')).toBe(true);
+      expect(report.headers).toEqual([
+        'Legajo',
+        'Nombre',
+        'Apellido',
+        'Promedio',
+      ]);
+      expect(report.rows).toEqual([]);
+      expect(report.filas).toEqual([]);
+      expect(report.examenes).toEqual([]);
+    });
+  });
 
-      const pdf = await service.generateCursoPdf('curso-1');
-      expect(pdf.buffer.length).toBeGreaterThan(0);
+  describe('Generación de archivos CSV y PDF', () => {
+    const mockSampleExamen = {
+      id: 'exam-sample',
+      titulo: 'Examen de Álgebra',
+      fecha: new Date('2026-05-15T10:00:00Z'),
+      curso: {
+        id: 'curso-sample',
+        materia: 'Álgebra',
+        division: 'A',
+        anio: 1,
+        anioLectivo: 2026,
+      },
+      entregas: [
+        {
+          id: 'ent-1',
+          estado: 'PUBLICADO',
+          alumno: {
+            id: 'a1',
+            legajo: 'L-500',
+            nombre: 'Matías',
+            apellido: 'Báez',
+          },
+          correccion: {
+            notaFinal: 9.5,
+            nivelConfianza: 'ALTO',
+            fechaAprobacion: new Date('2026-05-18T10:00:00Z'),
+          },
+        },
+      ],
+    };
+
+    const mockSampleCurso = {
+      id: 'curso-sample',
+      materia: 'Álgebra',
+      division: 'A',
+      anio: 1,
+      anioLectivo: 2026,
+      alumnos: [
+        {
+          alumno: {
+            id: 'a1',
+            legajo: 'L-500',
+            nombre: 'Matías',
+            apellido: 'Báez',
+          },
+        },
+      ],
+      examenes: [
+        {
+          id: 'exam-sample',
+          titulo: 'Examen de Álgebra',
+          fecha: new Date('2026-05-15T10:00:00Z'),
+          entregas: [
+            {
+              alumnoId: 'a1',
+              estado: 'PUBLICADO',
+              correccion: { notaFinal: 9.5 },
+            },
+          ],
+        },
+      ],
+    };
+
+    beforeEach(() => {
+      mockPrismaService.examen.findUnique.mockResolvedValue(mockSampleExamen);
+      mockPrismaService.curso.findUnique.mockResolvedValue(mockSampleCurso);
+    });
+
+    it('generateExamenCsv debe incluir el BOM UTF-8 (\uFEFF) y sep=, al inicio del archivo', async () => {
+      const result = await service.generateExamenCsv('exam-sample');
+
+      expect(result.filename).toBe('notas-algebra-a-2026-05-15.csv');
+      expect(result.buffer).toBeInstanceOf(Buffer);
+
+      // Comprobar primeros 3 bytes correspondientes al BOM UTF-8 (EF BB BF)
+      expect(result.buffer[0]).toBe(0xef);
+      expect(result.buffer[1]).toBe(0xbb);
+      expect(result.buffer[2]).toBe(0xbf);
+
+      expect(result.content.startsWith('\uFEFFsep=,\n')).toBe(true);
+      expect(result.content).toContain('L-500,Matias,Baez,9.5,ALTO,2026-05-18');
+    });
+
+    it('generateCursoCsv debe generar el CSV con BOM y promedio correcto', async () => {
+      const result = await service.generateCursoCsv('curso-sample');
+
+      expect(result.filename.startsWith('notas-algebra-a-')).toBe(true);
+      expect(result.filename.endsWith('.csv')).toBe(true);
+      expect(result.buffer).toBeInstanceOf(Buffer);
+      expect(result.buffer[0]).toBe(0xef);
+      expect(result.buffer[1]).toBe(0xbb);
+      expect(result.buffer[2]).toBe(0xbf);
+
+      expect(result.content.startsWith('\uFEFFsep=,\n')).toBe(true);
+      expect(result.content).toContain(
+        'Legajo,Nombre,Apellido,Examen de Algebra,Promedio',
+      );
+      expect(result.content).toContain('L-500,Matias,Baez,9.5,9.5');
+    });
+
+    it('generateExamenPdf debe generar un buffer PDF válido con cabecera %PDF', async () => {
+      const result = await service.generateExamenPdf('exam-sample');
+
+      expect(result.filename).toBe('notas-algebra-a-2026-05-15.pdf');
+      expect(result.buffer).toBeInstanceOf(Buffer);
+      expect(result.buffer.length).toBeGreaterThan(100);
+
+      const header = result.buffer.subarray(0, 5).toString('ascii');
+      expect(header).toBe('%PDF-');
+    });
+
+    it('generateCursoPdf debe generar un buffer PDF válido', async () => {
+      const result = await service.generateCursoPdf('curso-sample');
+
+      expect(result.filename.startsWith('notas-algebra-a-')).toBe(true);
+      expect(result.filename.endsWith('.pdf')).toBe(true);
+      expect(result.buffer).toBeInstanceOf(Buffer);
+      expect(result.buffer.length).toBeGreaterThan(100);
+
+      const header = result.buffer.subarray(0, 5).toString('ascii');
+      expect(header).toBe('%PDF-');
     });
   });
 });

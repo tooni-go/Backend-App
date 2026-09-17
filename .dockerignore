@@ -1,20 +1,38 @@
 node_modules
 dist
-generated
-npm-debug.log
-.git
+
+# Variables de entorno
 .env
 .env.local
 .env.*.local
 .env.development
 .env.test
 .env.production
+
+# Logs
+*.log
+npm-debug.log
+
+# Generados y pruebas
+generated
+test-output
+
+# Base de datos (Prisma)
 prisma/*.db
 prisma/*.db-journal
-uploads
+
+# Subidas (ignora el contenido pero conserva la carpeta con .gitkeep)
+uploads/*
+!uploads/.gitkeep
+
+# Docker
 Dockerfile
 .dockerignore
-.claude
-.windsurf
+
+# Editores y asistentes de IA
 .vscode
 .idea
+.claude
+.windsurf
+.agents
+.gemini

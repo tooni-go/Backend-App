@@ -1,11 +1,12 @@
-﻿import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
 import { ProfesorController } from './profesor.controller';
 import { ProfesorService } from './profesor.service';
-import { PrismaService } from '../prisma/prisma.service'; // Adjust path if PrismaModule exists
 
 @Module({
+  imports: [PrismaModule],
   controllers: [ProfesorController],
-  providers: [ProfesorService, PrismaService],
+  providers: [ProfesorService],
   exports: [ProfesorService],
 })
 export class ProfesorModule {}
