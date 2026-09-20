@@ -294,4 +294,69 @@ export class CursosService {
       },
     });
   }
+
+  /**
+   * Importa alumnos masivamente a un curso.
+   */
+  async importarAlumnosMasivo(
+    cursoId: string,
+    alumnos: Array<{ nombre: string; apellido: string; legajo: string; email?: string }>,
+  ) {
+    const curso = await this.prisma.curso.findUnique({
+      where: { id: cursoId },
+    });
+    if (!curso) {
+      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+    }
+
+    let procesados = 0;
+    const errores: any[] = [];
+
+    for (const [index, a] of alumnos.entries()) {
+      try {
+        let alumno = await this.prisma.alumno.findUnique({
+          where: { legajo: a.legajo },
+        });
+
+        if (alumno) {
+          alumno = await this.prisma.alumno.update({
+            where: { id: alumno.id },
+            data: { nombre: a.nombre, apellido: a.apellido, email: a.email },
+          });
+        } else {
+          alumno = await this.prisma.alumno.create({
+            data: {
+              nombre: a.nombre,
+              apellido: a.apellido,
+              legajo: a.legajo,
+              email: a.email,
+            },
+          });
+        }
+
+        await this.prisma.alumnoCurso.upsert({
+          where: {
+            alumnoId_cursoId: {
+              alumnoId: alumno.id,
+              cursoId,
+            },
+          },
+          create: {
+            alumnoId: alumno.id,
+            cursoId,
+          },
+          update: {},
+        });
+        procesados++;
+      } catch (error: any) {
+        errores.push({ fila: index + 1, legajo: a.legajo, error: error.message });
+      }
+    }
+
+    return {
+      totalRecibidos: alumnos.length,
+      procesados,
+      errores,
+    };
+  }
 }
