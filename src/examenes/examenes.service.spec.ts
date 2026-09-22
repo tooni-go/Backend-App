@@ -294,7 +294,9 @@ describe('ExamenesService - regenerarPregunta', () => {
         undefined,
       );
 
-      expect(response.sugerencia.enunciado).toBe('Consigna regenerada desde memoria.');
+      expect(response.sugerencia.enunciado).toBe(
+        'Consigna regenerada desde memoria.',
+      );
     });
   });
 
@@ -713,4 +715,3 @@ describe('ExamenesService - regenerarPregunta', () => {
     });
   });
 });
-
