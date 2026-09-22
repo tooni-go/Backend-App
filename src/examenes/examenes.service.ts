@@ -6,18 +6,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService, GeneratedExam } from '../ai/ai.service';
 import { RegenerarPreguntaDto, TipoAjuste } from './dto/regenerar-pregunta.dto';
-
-export class UpdateExamenDto {
-  titulo: string;
-  puntajeTotal: number;
-  preguntas: Array<{
-    enunciado: string;
-    respuestaEsperada: string;
-    puntajeMaximo: number;
-    criteriosIA?: string | null;
-    esEvaluacionVisual?: boolean;
-  }>;
-}
+import { UpdateExamenDto } from './dto/update-examen.dto';
+import { DuplicarExamenDto } from './dto/duplicar-examen.dto';
 
 @Injectable()
 export class ExamenesService {
@@ -26,6 +16,9 @@ export class ExamenesService {
     private readonly aiService: AiService,
   ) {}
 
+  /**
+   * Genera un examen inteligente a partir de consignas en texto o archivo adjunto.
+   */
   async generateExam(params: {
     texto?: string;
     file?: Express.Multer.File;
@@ -37,6 +30,9 @@ export class ExamenesService {
     });
   }
 
+  /**
+   * Obtiene el detalle de un examen por ID con sus preguntas, entregas y el curso con sus alumnos anidados.
+   */
   async getExamen(id: string) {
     const examen = await this.prisma.examen.findUnique({
       where: { id },
@@ -62,61 +58,148 @@ export class ExamenesService {
     return examen;
   }
 
+  /**
+   * Actualiza un examen existente y sincroniza su lista de preguntas.
+   */
   async updateExamen(id: string, dto: UpdateExamenDto) {
-    const examen = await this.prisma.examen.findUnique({ where: { id } });
-    if (!examen)
+    const examenExistente = await this.prisma.examen.findUnique({
+      where: { id },
+      include: { preguntas: true },
+    });
+
+    if (!examenExistente) {
       throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    }
+
+    let parsedFecha: Date | undefined = undefined;
+    if (dto.fecha) {
+      if (dto.fecha.includes('/')) {
+        const parts = dto.fecha.split('/');
+        if (parts.length === 3) {
+          const day = parseInt(parts[0], 10);
+          const month = parseInt(parts[1], 10) - 1;
+          const year = parseInt(parts[2], 10);
+          const d = new Date(year, month, day);
+          if (!isNaN(d.getTime())) {
+            parsedFecha = d;
+          }
+        }
+      } else {
+        const d = new Date(dto.fecha);
+        if (!isNaN(d.getTime())) {
+          parsedFecha = d;
+        }
+      }
+    }
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.pregunta.deleteMany({
-        where: { examenId: id },
-      });
+      const updateData: { titulo?: string; fecha?: Date } = {};
+      if (dto.titulo !== undefined) updateData.titulo = dto.titulo;
+      if (parsedFecha) updateData.fecha = parsedFecha;
 
-      return tx.examen.update({
-        where: { id },
-        data: {
-          titulo: dto.titulo,
-          puntajeTotal: dto.puntajeTotal,
-          preguntas: {
-            create: dto.preguntas.map((p) => ({
+      if (Object.keys(updateData).length > 0) {
+        await tx.examen.update({
+          where: { id },
+          data: updateData,
+        });
+      }
+
+      if (dto.preguntas && Array.isArray(dto.preguntas)) {
+        await tx.pregunta.deleteMany({
+          where: { examenId: id },
+        });
+
+        if (dto.preguntas.length > 0) {
+          await tx.pregunta.createMany({
+            data: dto.preguntas.map((p) => ({
+              examenId: id,
               enunciado: p.enunciado,
               respuestaEsperada: p.respuestaEsperada,
               puntajeMaximo: p.puntajeMaximo,
               criteriosIA: p.criteriosIA || null,
               esEvaluacionVisual: p.esEvaluacionVisual ?? false,
             })),
-          },
+          });
+        }
+      }
+
+      return tx.examen.findUnique({
+        where: { id },
+        include: {
+          preguntas: true,
+          curso: true,
         },
       });
     });
   }
 
+  /**
+   * Elimina un examen y todas sus relaciones (correcciones, entregas y preguntas).
+   */
   async deleteExamen(id: string) {
-    const examen = await this.prisma.examen.findUnique({ where: { id } });
-    if (!examen)
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
-
-    await this.prisma.examen.delete({
+    const examen = await this.prisma.examen.findUnique({
       where: { id },
     });
-    return { success: true };
+
+    if (!examen) {
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.correccion.deleteMany({
+        where: {
+          entrega: {
+            examenId: id,
+          },
+        },
+      });
+
+      await tx.entrega.deleteMany({
+        where: { examenId: id },
+      });
+
+      await tx.pregunta.deleteMany({
+        where: { examenId: id },
+      });
+
+      await tx.examen.delete({
+        where: { id },
+      });
+
+      return { message: 'Examen eliminado correctamente', id };
+    });
   }
 
-  async duplicateExamen(id: string, cursoDestinoId?: string) {
+  /**
+   * Duplica un examen y sus consignas en el curso especificado o en el mismo curso.
+   */
+  async duplicarExamen(id: string, dto?: DuplicarExamenDto) {
     const examen = await this.prisma.examen.findUnique({
       where: { id },
       include: { preguntas: true },
     });
-    if (!examen)
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
 
-    const newCursoId = cursoDestinoId || examen.cursoId;
+    if (!examen) {
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    }
+
+    const targetCourseId = dto?.cursoDestinoId || examen.cursoId;
+
+    const cursoDestino = await this.prisma.curso.findUnique({
+      where: { id: targetCourseId },
+    });
+
+    if (!cursoDestino) {
+      throw new NotFoundException(
+        `Curso de destino con ID ${targetCourseId} no encontrado.`,
+      );
+    }
 
     return this.prisma.examen.create({
       data: {
-        titulo: `Copia de ${examen.titulo}`,
-        puntajeTotal: examen.puntajeTotal,
-        cursoId: newCursoId,
+        titulo: `${examen.titulo} (Copia)`,
+        cursoId: targetCourseId,
+        fecha: new Date(),
         preguntas: {
           create: examen.preguntas.map((p) => ({
             enunciado: p.enunciado,
@@ -127,7 +210,18 @@ export class ExamenesService {
           })),
         },
       },
+      include: {
+        preguntas: true,
+        curso: true,
+      },
     });
+  }
+
+  /**
+   * Alias de compatibilidad para duplicar examen.
+   */
+  async duplicateExamen(id: string, cursoDestinoId?: string) {
+    return this.duplicarExamen(id, { cursoDestinoId });
   }
 
   /**
