@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -191,5 +191,39 @@ export class CursosController {
     },
   ) {
     return this.cursosService.createExamen(cursoId, body);
+  }
+
+  @Post(':id/alumnos/importar-masivo')
+  @ApiOperation({ summary: 'Importar múltiples alumnos masivamente desde CSV/Excel a un curso' })
+  @ApiParam({ name: 'id', description: 'ID del curso' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        alumnos: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['nombre', 'apellido', 'legajo'],
+            properties: {
+              nombre: { type: 'string', example: 'Ana' },
+              apellido: { type: 'string', example: 'García' },
+              legajo: { type: 'string', example: 'L-99999' },
+              email: { type: 'string', example: 'ana@example.com' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Reporte de la importación masiva.',
+  })
+  async importStudentsMassive(
+    @Param('id') cursoId: string,
+    @Body() body: { alumnos: Array<{ nombre: string; apellido: string; legajo: string; email?: string }> },
+  ) {
+    return this.cursosService.importarAlumnosMasivo(cursoId, body.alumnos);
   }
 }

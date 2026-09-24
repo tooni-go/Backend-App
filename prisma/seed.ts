@@ -1,9 +1,10 @@
 import { PrismaClient } from '../generated/prisma/client';
-import { PrismaLibSql } from '@prisma/adapter-libsql';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
-const adapter = new PrismaLibSql({
-  url: process.env.DATABASE_URL || 'file:dev.db',
-});
+const connectionString = process.env.DATABASE_URL || 'postgresql://evalia_user:evalia_password@localhost:5433/evalia_db';
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
@@ -35,7 +36,7 @@ async function main() {
   console.log('Creando curso de prueba...');
   const curso = await prisma.curso.create({
     data: {
-      materia: 'QuÃ­mica OrgÃ¡nica',
+      materia: 'Química Orgánica',
       anio: 5,
       division: 'A',
       anioLectivo: 2026,
@@ -48,15 +49,15 @@ async function main() {
   const alumno1 = await prisma.alumno.create({
     data: {
       nombre: 'Mateo',
-      apellido: 'FernÃ¡ndez',
+      apellido: 'Fernández',
       legajo: 'L-50001',
     },
   });
 
   const alumno2 = await prisma.alumno.create({
     data: {
-      nombre: 'SofÃ­a',
-      apellido: 'RodrÃ­guez',
+      nombre: 'Sofía',
+      apellido: 'Rodríguez',
       legajo: 'L-50002',
     },
   });
@@ -64,7 +65,7 @@ async function main() {
   const alumno3 = await prisma.alumno.create({
     data: {
       nombre: 'Santiago',
-      apellido: 'GÃ³mez',
+      apellido: 'Gómez',
       legajo: 'L-50003',
     },
   });
@@ -88,18 +89,18 @@ async function main() {
       preguntas: {
         create: [
           {
-            enunciado: 'Â¿CuÃ¡l es la fÃ³rmula quÃ­mica del benceno y describa su estructura molecular?',
-            respuestaEsperada: 'La fÃ³rmula del benceno es C6H6, estructurada en un anillo hexagonal plano con dobles enlaces conjugados resonantes.',
+            enunciado: '¿Cuál es la fórmula química del benceno y describa su estructura molecular?',
+            respuestaEsperada: 'La fórmula del benceno es C6H6, estructurada en un anillo hexagonal plano con dobles enlaces conjugados resonantes.',
             puntajeMaximo: 5.0,
-            criteriosIA: 'Verificar menciÃ³n a C6H6, anillo hexagonal y resonancia o hibridaciÃ³n sp2.',
+            criteriosIA: 'Verificar mención a C6H6, anillo hexagonal y resonancia o hibridación sp2.',
             esEvaluacionVisual: false,
           },
           {
-            enunciado: 'Dibuje la estructura geomÃ©trica del isÃ³mero cis-2-buteno.',
+            enunciado: 'Dibuje la estructura geométrica del isómero cis-2-buteno.',
             respuestaEsperada: 'Estructura con los dos grupos metilo (-CH3) del mismo lado del doble enlace carbono-carbono.',
             puntajeMaximo: 5.0,
-            criteriosIA: 'Evaluar disposiciÃ³n espacial espacial de los metilos del mismo lado del doble enlace.',
-            esEvaluacionVisual: true, // Pregunta visual para gatillar revisiÃ³n manual
+            criteriosIA: 'Evaluar disposición espacial espacial de los metilos del mismo lado del doble enlace.',
+            esEvaluacionVisual: true, // Pregunta visual para gatillar revisión manual
           },
         ],
       },
