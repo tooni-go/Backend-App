@@ -12,13 +12,28 @@ import {
 describe('ExamenesService - regenerarPregunta', () => {
   let service: ExamenesService;
 
-  const mockPrismaService = {
+  const mockPrismaService: any = {
     examen: {
       findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      create: jest.fn(),
     },
     pregunta: {
       findUnique: jest.fn(),
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
     },
+    entrega: {
+      deleteMany: jest.fn(),
+    },
+    correccion: {
+      deleteMany: jest.fn(),
+    },
+    curso: {
+      findUnique: jest.fn(),
+    },
+    $transaction: jest.fn((cb) => cb(mockPrismaService)),
   };
 
   const mockAiService = {
@@ -279,7 +294,9 @@ describe('ExamenesService - regenerarPregunta', () => {
         undefined,
       );
 
-      expect(response.sugerencia.enunciado).toBe('Consigna regenerada desde memoria.');
+      expect(response.sugerencia.enunciado).toBe(
+        'Consigna regenerada desde memoria.',
+      );
     });
   });
 
@@ -533,5 +550,168 @@ describe('ExamenesService - regenerarPregunta', () => {
       ]);
     });
   });
-});
 
+  describe('updateExamen', () => {
+    it('debe lanzar NotFoundException si el examen a editar no existe', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.updateExamen('inexistente', { titulo: 'Nuevo Título' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('debe actualizar título y sincronizar preguntas en una transacción', async () => {
+      mockPrismaService.examen.findUnique
+        .mockResolvedValueOnce({
+          id: 'ex-1',
+          titulo: 'Título Viejo',
+          preguntas: [{ id: 'p-old' }],
+        })
+        .mockResolvedValueOnce({
+          id: 'ex-1',
+          titulo: 'Título Nuevo',
+          preguntas: [
+            {
+              id: 'p-new-1',
+              enunciado: 'Pregunta Actualizada',
+              respuestaEsperada: 'Respuesta Actualizada',
+              puntajeMaximo: 10,
+            },
+          ],
+        });
+
+      mockPrismaService.examen.update.mockResolvedValue({});
+      mockPrismaService.pregunta.deleteMany.mockResolvedValue({});
+      mockPrismaService.pregunta.createMany.mockResolvedValue({});
+
+      const result = await service.updateExamen('ex-1', {
+        titulo: 'Título Nuevo',
+        preguntas: [
+          {
+            enunciado: 'Pregunta Actualizada',
+            respuestaEsperada: 'Respuesta Actualizada',
+            puntajeMaximo: 10,
+          },
+        ],
+      });
+
+      expect(mockPrismaService.examen.update).toHaveBeenCalledWith({
+        where: { id: 'ex-1' },
+        data: { titulo: 'Título Nuevo' },
+      });
+      expect(mockPrismaService.pregunta.deleteMany).toHaveBeenCalledWith({
+        where: { examenId: 'ex-1' },
+      });
+      expect(mockPrismaService.pregunta.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            examenId: 'ex-1',
+            enunciado: 'Pregunta Actualizada',
+            respuestaEsperada: 'Respuesta Actualizada',
+            puntajeMaximo: 10,
+            criteriosIA: null,
+            esEvaluacionVisual: false,
+          },
+        ],
+      });
+      expect(result?.titulo).toBe('Título Nuevo');
+    });
+  });
+
+  describe('deleteExamen', () => {
+    it('debe lanzar NotFoundException si el examen a eliminar no existe', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.deleteExamen('inexistente')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('debe eliminar correcciones, entregas, preguntas y el examen en cascada', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+        id: 'ex-delete',
+      });
+      mockPrismaService.correccion.deleteMany.mockResolvedValue({});
+      mockPrismaService.entrega.deleteMany.mockResolvedValue({});
+      mockPrismaService.pregunta.deleteMany.mockResolvedValue({});
+      mockPrismaService.examen.delete.mockResolvedValue({});
+
+      const result = await service.deleteExamen('ex-delete');
+
+      expect(mockPrismaService.correccion.deleteMany).toHaveBeenCalled();
+      expect(mockPrismaService.entrega.deleteMany).toHaveBeenCalled();
+      expect(mockPrismaService.pregunta.deleteMany).toHaveBeenCalled();
+      expect(mockPrismaService.examen.delete).toHaveBeenCalledWith({
+        where: { id: 'ex-delete' },
+      });
+      expect(result).toEqual({
+        message: 'Examen eliminado correctamente',
+        id: 'ex-delete',
+      });
+    });
+  });
+
+  describe('duplicarExamen', () => {
+    it('debe lanzar NotFoundException si el examen fuente no existe', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+
+      await expect(service.duplicarExamen('inexistente')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('debe duplicar el examen y sus preguntas en el curso destino', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+        id: 'ex-orig',
+        titulo: 'Parcial 1',
+        cursoId: 'c-1',
+        preguntas: [
+          {
+            enunciado: 'Consigna 1',
+            respuestaEsperada: 'Resp 1',
+            puntajeMaximo: 5,
+            criteriosIA: 'Crit',
+            esEvaluacionVisual: false,
+          },
+        ],
+      });
+      mockPrismaService.curso.findUnique.mockResolvedValueOnce({
+        id: 'c-2',
+        materia: 'Matemática',
+      });
+      mockPrismaService.examen.create.mockResolvedValueOnce({
+        id: 'ex-copy',
+        titulo: 'Parcial 1 (Copia)',
+        cursoId: 'c-2',
+        preguntas: [{ id: 'p-dup-1', enunciado: 'Consigna 1' }],
+      });
+
+      const result = await service.duplicarExamen('ex-orig', {
+        cursoDestinoId: 'c-2',
+      });
+
+      expect(mockPrismaService.examen.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          titulo: 'Parcial 1 (Copia)',
+          cursoId: 'c-2',
+          preguntas: {
+            create: [
+              {
+                enunciado: 'Consigna 1',
+                respuestaEsperada: 'Resp 1',
+                puntajeMaximo: 5,
+                criteriosIA: 'Crit',
+                esEvaluacionVisual: false,
+              },
+            ],
+          },
+        }),
+        include: {
+          preguntas: true,
+          curso: true,
+        },
+      });
+      expect(result.id).toBe('ex-copy');
+    });
+  });
+});
