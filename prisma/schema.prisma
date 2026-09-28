@@ -21,15 +21,16 @@ model Profesor {
 }
 
 model Curso {
-  id          String        @id @default(uuid())
-  materia     String
-  anio        Int
-  division    String
-  anioLectivo Int
-  profesorId  String
-  profesor    Profesor      @relation(fields: [profesorId], references: [id])
-  alumnos     AlumnoCurso[]
-  examenes    Examen[]
+  id                   String        @id @default(uuid())
+  materia              String
+  anio                 Int
+  division             String
+  anioLectivo          Int
+  profesorId           String
+  preferenciasMembrete String?
+  profesor             Profesor      @relation(fields: [profesorId], references: [id])
+  alumnos              AlumnoCurso[]
+  examenes             Examen[]
 }
 
 model Alumno {
@@ -37,6 +38,7 @@ model Alumno {
   nombre   String
   apellido String
   legajo   String        @unique
+  email    String?
   cursos   AlumnoCurso[]
   entregas Entrega[]
 }

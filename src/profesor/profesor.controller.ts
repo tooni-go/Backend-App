@@ -19,8 +19,8 @@ export class ProfesorController {
   @Get('me')
   @ApiOperation({ summary: 'Obtener perfil del profesor autenticado' })
   @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente.' })
-  async getProfile(@Req() req: any) {
-    return this.profesorService.getProfile(req.user.id);
+  async getMe(@Req() req?: any) {
+    return this.profesorService.getProfile(req?.user?.id);
   }
 
   @Put('me')
@@ -37,7 +37,7 @@ export class ProfesorController {
   })
   @ApiResponse({ status: 200, description: 'Perfil actualizado exitosamente.' })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
-  async updateProfile(@Body() body: UpdateProfesorDto, @Req() req: any) {
-    return this.profesorService.updateProfile(req.user.id, body);
+  async updateMe(@Body() body: UpdateProfesorDto, @Req() req?: any) {
+    return this.profesorService.updateProfile(body, req?.user?.id);
   }
 }
