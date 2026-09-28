@@ -103,6 +103,7 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
 
       mockPrismaService.examen.findUnique.mockResolvedValueOnce({
         id: 'exam-1',
+        estado: 'PUBLICADO',
       });
       mockPrismaService.alumno.findUnique.mockResolvedValueOnce(null);
 
@@ -111,8 +112,39 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('lanza BadRequestException si el examen está en estado BORRADOR o ARCHIVADO', async () => {
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+        id: 'exam-1',
+        estado: 'BORRADOR',
+      });
+
+      await expect(
+        service.createEntrega('exam-1', 'alumno-1', mockFile),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'No se pueden subir entregas a un examen en estado BORRADOR o ARCHIVADO.',
+        ),
+      );
+
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+        id: 'exam-1',
+        estado: 'ARCHIVADO',
+      });
+
+      await expect(
+        service.createEntrega('exam-1', 'alumno-1', mockFile),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'No se pueden subir entregas a un examen en estado BORRADOR o ARCHIVADO.',
+        ),
+      );
+    });
+
     it('crea la entrega en estado PENDIENTE y dispara el procesamiento en background', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({ id: 'exam-1' });
+      mockPrismaService.examen.findUnique.mockResolvedValue({
+        id: 'exam-1',
+        estado: 'PUBLICADO',
+      });
       mockPrismaService.alumno.findUnique.mockResolvedValue({ id: 'alumno-1' });
       mockPrismaService.entrega.create.mockResolvedValue({
         id: 'entrega-123',

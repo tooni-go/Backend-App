@@ -14,7 +14,7 @@ Lista de tareas desglosadas para implementar y verificar el hosting unificado en
 - [x] **Actualizar Datasource de Prisma a PostgreSQL:**
   - Configurar `provider = "postgresql"` en `prisma/schema.prisma` del backend.
   - Generar el cliente de Prisma y verificar migraciones (`prisma migrate deploy`).
-- [ ] **Crear el Web Service de Backend en Render (`evalia-backend`):**
+- [x] **Crear el Web Service de Backend en Render (`evalia-backend`):**
   - Conectar el repositorio de GitHub `Backend-App`.
   - Configurar las variables de entorno (`DATABASE_URL`, `JWT_SECRET`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `PORT=3000`).
   - Desplegar y validar logs de arranque exitoso.
