@@ -23,7 +23,7 @@ import { CreateAlumnoDto, UpdateAlumnoDto } from './dto/alumno.dto';
 @ApiTags('Alumnos')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
-@Controller('api/v1/alumnos')
+@Controller(['api/v1/alumnos', 'alumnos'])
 export class AlumnosController {
   constructor(private readonly alumnosService: AlumnosService) {}
 

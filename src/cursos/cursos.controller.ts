@@ -1,4 +1,4 @@
-﻿import {
+import {
   Controller,
   Get,
   Post,
@@ -27,7 +27,7 @@ import {
 @ApiTags('Cursos')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
-@Controller('api/v1/cursos')
+@Controller(['api/v1/cursos', 'cursos'])
 export class CursosController {
   constructor(private readonly cursosService: CursosService) {}
 

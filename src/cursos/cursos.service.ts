@@ -154,7 +154,7 @@ export class CursosService {
         id: e.id,
         titulo: e.titulo,
         fecha: e.fecha,
-        estado: 'ACTIVO',
+        estado: e.estado,
       })),
     }));
   }

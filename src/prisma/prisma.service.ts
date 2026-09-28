@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -8,15 +8,36 @@ export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor() {
     const connectionString = process.env.DATABASE_URL;
-    const pool = new Pool({ connectionString });
+    const isRemote =
+      connectionString?.includes('render.com') ||
+      connectionString?.includes('sslmode=require') ||
+      process.env.NODE_ENV === 'production';
+
+    const pool = new Pool({
+      connectionString,
+      ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
   }
 
   async onModuleInit() {
-    await this.$connect();
+    try {
+      await this.$connect();
+      this.logger.log(
+        'Conexión a base de datos PostgreSQL establecida exitosamente.',
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `Error conectando a la base de datos PostgreSQL: ${msg}`,
+      );
+      throw err;
+    }
   }
 
   async onModuleDestroy() {

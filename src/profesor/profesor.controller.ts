@@ -12,7 +12,7 @@ import {
 @ApiTags('Profesor')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
-@Controller('api/v1/profesor')
+@Controller(['api/v1/profesor', 'profesor'])
 export class ProfesorController {
   constructor(private readonly profesorService: ProfesorService) {}
 
