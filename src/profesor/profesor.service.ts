@@ -38,22 +38,42 @@ export class ProfesorService {
     return profesor;
   }
 
-  async getProfile(id: string) {
-    const profesor = await this.prisma.profesor.findUnique({ where: { id } });
-    if (!profesor) {
-      throw new NotFoundException('Profesor no encontrado');
+  async getProfile(id?: string) {
+    if (id) {
+      const profesor = await this.prisma.profesor.findUnique({ where: { id } });
+      if (profesor) {
+        return profesor;
+      }
     }
-    return profesor;
+    return this.getOrCreateDefaultProfesor();
   }
 
-  async updateProfile(id: string, dto: UpdateProfesorDto) {
-    const profesor = await this.prisma.profesor.findUnique({ where: { id } });
-    if (!profesor) {
-      throw new NotFoundException('Profesor no encontrado');
+  async updateProfile(
+    idOrDto: string | UpdateProfesorDto,
+    maybeDto?: UpdateProfesorDto,
+  ) {
+    let id: string;
+    let dto: UpdateProfesorDto;
+
+    if (typeof idOrDto === 'string') {
+      id = idOrDto;
+      dto = maybeDto || {};
+      const profesor = await this.prisma.profesor.findUnique({ where: { id } });
+      if (!profesor) {
+        throw new NotFoundException('Profesor no encontrado');
+      }
+      return this.prisma.profesor.update({
+        where: { id },
+        data: dto,
+      });
+    } else {
+      dto = idOrDto || {};
+      const firstProf = await this.prisma.profesor.findFirst();
+      const defaultProf = firstProf || (await this.getOrCreateDefaultProfesor());
+      return this.prisma.profesor.update({
+        where: { id: defaultProf.id },
+        data: dto,
+      });
     }
-    return this.prisma.profesor.update({
-      where: { id },
-      data: dto,
-    });
   }
 }

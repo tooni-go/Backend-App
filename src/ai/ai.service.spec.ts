@@ -27,6 +27,7 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
     service = module.get<AiService>(AiService);
     resilienceService = module.get<AiResilienceService>(AiResilienceService);
     resilienceService.resetMetrics();
+    jest.spyOn(resilienceService, 'sleep').mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -411,10 +412,11 @@ describe('AiService - Carga Inteligente de Exámenes (generateExam & Guardrails)
         await service.generateExam({ texto: 'Examen 2' });
         await service.generateExam({ texto: 'Examen 3' });
 
-        // 1 llamada que falla en Gemini y va a OpenRouter con éxito
-        mockGenerateContent.mockRejectedValueOnce(
-          new Error('Gemini API 503 Service Unavailable'),
-        );
+        // 1 llamada que falla persistentemente en Gemini (agota los 2 reintentos) y va a OpenRouter con éxito
+        mockGenerateContent
+          .mockRejectedValueOnce(new Error('Gemini API 503 Service Unavailable'))
+          .mockRejectedValueOnce(new Error('Gemini API 503 Service Unavailable'))
+          .mockRejectedValueOnce(new Error('Gemini API 503 Service Unavailable'));
 
         await service.generateExam({ texto: 'Examen 4 (Fallback)' });
 
@@ -674,6 +676,8 @@ describe('AiService - regenerarPregunta', () => {
     }).compile();
 
     service = module.get<AiService>(AiService);
+    const resilience = module.get<AiResilienceService>(AiResilienceService);
+    jest.spyOn(resilience, 'sleep').mockResolvedValue(undefined);
     jest.clearAllMocks();
   });
 
@@ -830,5 +834,118 @@ describe('AiService - regenerarPregunta', () => {
 
       expect(result.enunciado).toBe('Refraseo con markdown envolvente');
     });
+  });
+});
+
+describe('AiService - Validación Proactiva de Credenciales (onModuleInit & validateCredentials)', () => {
+  let service: AiService;
+  let originalGeminiKey: string | undefined;
+  let originalOpenRouterKey: string | undefined;
+
+  beforeEach(async () => {
+    originalGeminiKey = process.env.GEMINI_API_KEY;
+    originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [AiService, AiResilienceService],
+    }).compile();
+
+    service = module.get<AiService>(AiService);
+  });
+
+  afterEach(() => {
+    if (originalGeminiKey !== undefined) {
+      process.env.GEMINI_API_KEY = originalGeminiKey;
+    } else {
+      delete process.env.GEMINI_API_KEY;
+    }
+
+    if (originalOpenRouterKey !== undefined) {
+      process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
+    } else {
+      delete process.env.OPENROUTER_API_KEY;
+    }
+
+    jest.restoreAllMocks();
+  });
+
+  it('valida exitosamente cuando ambas credenciales están configuradas', () => {
+    process.env.GEMINI_API_KEY = 'gemini-key-valida';
+    process.env.OPENROUTER_API_KEY = 'openrouter-key-valida';
+
+    const loggerLogSpy = jest.spyOn((service as any).logger, 'log');
+
+    const result = service.validateCredentials();
+
+    expect(result).toEqual({
+      geminiConfigured: true,
+      openRouterConfigured: true,
+    });
+    expect(loggerLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Credenciales de IA validadas correctamente'),
+    );
+  });
+
+  it('emite Logger.warn descriptivo cuando falta GEMINI_API_KEY', () => {
+    delete process.env.GEMINI_API_KEY;
+    process.env.OPENROUTER_API_KEY = 'openrouter-key-valida';
+
+    const loggerWarnSpy = jest.spyOn((service as any).logger, 'warn');
+
+    const result = service.validateCredentials();
+
+    expect(result).toEqual({
+      geminiConfigured: false,
+      openRouterConfigured: true,
+    });
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('GEMINI_API_KEY no está configurada'),
+    );
+  });
+
+  it('emite Logger.warn descriptivo cuando falta OPENROUTER_API_KEY', () => {
+    process.env.GEMINI_API_KEY = 'gemini-key-valida';
+    delete process.env.OPENROUTER_API_KEY;
+
+    const loggerWarnSpy = jest.spyOn((service as any).logger, 'warn');
+
+    const result = service.validateCredentials();
+
+    expect(result).toEqual({
+      geminiConfigured: true,
+      openRouterConfigured: false,
+    });
+    expect(loggerWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('OPENROUTER_API_KEY no está configurada'),
+    );
+  });
+
+  it('emite Logger.error de alerta crítica cuando faltan ambas credenciales sin lanzar excepciones', () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+
+    const loggerErrorSpy = jest.spyOn((service as any).logger, 'error');
+
+    expect(() => {
+      const result = service.validateCredentials();
+      expect(result).toEqual({
+        geminiConfigured: false,
+        openRouterConfigured: false,
+      });
+    }).not.toThrow();
+
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('ALERTA CRÍTICA: Ninguna credencial de IA configurada'),
+    );
+  });
+
+  it('onModuleInit ejecuta validateCredentials durante el ciclo de vida sin interrumpir el arranque', () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
+
+    const validateSpy = jest.spyOn(service, 'validateCredentials');
+
+    expect(() => service.onModuleInit()).not.toThrow();
+    expect(validateSpy).toHaveBeenCalledTimes(1);
   });
 });

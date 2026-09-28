@@ -3,6 +3,7 @@ import {
   Logger,
   BadRequestException,
   InternalServerErrorException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
@@ -172,13 +173,58 @@ export const OPENROUTER_HOMOLOGATED_MODELS: OpenRouterModelOption[] = [
 ];
 
 @Injectable()
-export class AiService {
+export class AiService implements OnModuleInit {
   private readonly logger = new Logger(AiService.name);
   private activeOpenRouterModel: string =
     process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
   private isModelOverridden = false;
 
   constructor(private readonly aiResilienceService: AiResilienceService) {}
+
+  /**
+   * Ciclo de vida NestJS: Valida proactivamente la presencia de las credenciales de IA al iniciar el módulo.
+   */
+  onModuleInit(): void {
+    this.validateCredentials();
+  }
+
+  /**
+   * Valida la presencia y consistencia de las API keys de Gemini y OpenRouter.
+   * No lanza excepciones para no interrumpir el arranque en desarrollo local o tareas administrativas.
+   */
+  validateCredentials(): {
+    geminiConfigured: boolean;
+    openRouterConfigured: boolean;
+  } {
+    const geminiKey = process.env.GEMINI_API_KEY?.trim();
+    const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+
+    const hasGemini = Boolean(geminiKey && geminiKey.length > 0);
+    const hasOpenRouter = Boolean(openRouterKey && openRouterKey.length > 0);
+
+    if (!hasGemini && !hasOpenRouter) {
+      this.logger.error(
+        'ALERTA CRÍTICA: Ninguna credencial de IA configurada (faltan GEMINI_API_KEY y OPENROUTER_API_KEY). Todas las funciones de IA fallarán.',
+      );
+    } else if (!hasGemini) {
+      this.logger.warn(
+        'GEMINI_API_KEY no está configurada. El proveedor principal Gemini no estará disponible; el sistema dependerá exclusivamente de OpenRouter.',
+      );
+    } else if (!hasOpenRouter) {
+      this.logger.warn(
+        'OPENROUTER_API_KEY no está configurada. El proveedor secundario OpenRouter no estará disponible; el mecanismo de fallback quedará inhabilitado si Gemini falla.',
+      );
+    } else {
+      this.logger.log(
+        'Credenciales de IA validadas correctamente (Gemini y OpenRouter configurados).',
+      );
+    }
+
+    return {
+      geminiConfigured: hasGemini,
+      openRouterConfigured: hasOpenRouter,
+    };
+  }
 
   /**
    * Retorna una copia de las métricas de uso acumuladas en memoria.

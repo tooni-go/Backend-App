@@ -10,9 +10,12 @@ import {
   UseInterceptors,
   UsePipes,
   ValidationPipe,
+  Optional,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService } from './examenes.service';
+import { SimilitudService } from '../similitud/similitud.service';
 import { GeneratedExam } from '../ai/ai.service';
 import { RegenerarPreguntaDto } from './dto/regenerar-pregunta.dto';
 import { UpdateExamenDto } from './dto/update-examen.dto';
@@ -28,7 +31,22 @@ import {
 @ApiTags('Exámenes')
 @Controller('api/v1/examenes')
 export class ExamenesController {
-  constructor(private readonly examenesService: ExamenesService) {}
+  constructor(
+    private readonly examenesService: ExamenesService,
+    @Optional() private readonly similitudService?: SimilitudService,
+  ) {}
+
+  @Get(':id/similitud')
+  @ApiOperation({ summary: 'Obtener análisis de similitud del examen' })
+  @ApiParam({ name: 'id', description: 'ID del examen' })
+  async getSimilitudExamen(@Param('id') id: string) {
+    if (!this.similitudService) {
+      throw new InternalServerErrorException(
+        'SimilitudService no está disponible en este contexto.',
+      );
+    }
+    return this.similitudService.analizarSimilitudExamen(id);
+  }
 
   @Post('generar')
   @ApiOperation({
