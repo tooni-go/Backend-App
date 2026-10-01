@@ -41,7 +41,9 @@ export class ProfesorService {
   async getProfile(id?: string) {
     if (id) {
       const profesor = await this.prisma.profesor.findUnique({ where: { id } });
-      if (profesor) return profesor;
+      if (profesor) {
+        return profesor;
+      }
     }
     return this.getOrCreateDefaultProfesor();
   }
