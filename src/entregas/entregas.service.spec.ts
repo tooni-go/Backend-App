@@ -10,6 +10,7 @@ jest.mock('fs', () => ({
   existsSync: jest.fn().mockReturnValue(true),
   mkdirSync: jest.fn(),
   writeFileSync: jest.fn(),
+  readFileSync: jest.fn().mockReturnValue(Buffer.from('dummy file content')),
 }));
 
 describe('EntregasService - Creación, Corrección Asíncrona e Integración con AI', () => {
@@ -299,6 +300,71 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
         include: { correccion: true },
       });
       expect(result.estado).toBe('PUBLICADO');
+    });
+  });
+
+  describe('reintentarCorreccion', () => {
+    it('lanza NotFoundException si la entrega no existe', async () => {
+      mockPrismaService.entrega.findUnique.mockResolvedValueOnce(null);
+
+      await expect(
+        service.reintentarCorreccion('entrega-inexistente'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lanza BadRequestException si el estado no es REQUIERE_REVISION', async () => {
+      mockPrismaService.entrega.findUnique.mockResolvedValueOnce({
+        id: 'entrega-123',
+        estado: 'PENDIENTE',
+        archivo: 'uploads/test.pdf',
+      });
+
+      await expect(
+        service.reintentarCorreccion('entrega-123'),
+      ).rejects.toThrow(
+        'Solo se puede reintentar la corrección en entregas con estado REQUIERE_REVISION. Estado actual: PENDIENTE',
+      );
+    });
+
+    it('lanza BadRequestException si el archivo original no existe en disco', async () => {
+      mockPrismaService.entrega.findUnique.mockResolvedValueOnce({
+        id: 'entrega-123',
+        estado: 'REQUIERE_REVISION',
+        archivo: 'uploads/inexistente.pdf',
+      });
+
+      (fs.existsSync as jest.Mock).mockReturnValueOnce(false);
+
+      await expect(
+        service.reintentarCorreccion('entrega-123'),
+      ).rejects.toThrow(
+        'No se encontró el archivo original de la entrega en el servidor.',
+      );
+    });
+
+    it('reintenta exitosamente disparando processCorrectionBackground y retornando PROCESANDO', async () => {
+      mockPrismaService.entrega.findUnique.mockResolvedValueOnce({
+        id: 'entrega-123',
+        estado: 'REQUIERE_REVISION',
+        archivo: 'uploads/test-submission.pdf',
+      });
+
+      const backgroundSpy = jest
+        .spyOn(service as any, 'processCorrectionBackground')
+        .mockResolvedValue(undefined);
+
+      const result = await service.reintentarCorreccion('entrega-123');
+
+      expect(result).toEqual({
+        message: 'Reintento de corrección iniciado.',
+        entregaId: 'entrega-123',
+        estado: 'PROCESANDO',
+      });
+      expect(backgroundSpy).toHaveBeenCalledWith(
+        'entrega-123',
+        expect.any(Buffer),
+        'application/pdf',
+      );
     });
   });
 });
