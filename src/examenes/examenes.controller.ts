@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Param,
   Body,
@@ -16,6 +17,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService } from './examenes.service';
 import { SimilitudService } from '../similitud/similitud.service';
+import { UpdateEstadoExamenDto } from './dto/update-estado-examen.dto';
 import { GeneratedExam } from '../ai/ai.service';
 import { RegenerarPreguntaDto } from './dto/regenerar-pregunta.dto';
 import { UpdateExamenDto } from './dto/update-examen.dto';
@@ -29,7 +31,7 @@ import {
 } from '@nestjs/swagger';
 
 @ApiTags('Exámenes')
-@Controller('api/v1/examenes')
+@Controller(['api/v1/examenes', 'examenes'])
 export class ExamenesController {
   constructor(
     private readonly examenesService: ExamenesService,
@@ -105,6 +107,31 @@ export class ExamenesController {
     @Body() dto: UpdateExamenDto,
   ) {
     return this.examenesService.updateExamen(id, dto);
+  }
+
+  @Patch(':id/estado')
+  @ApiOperation({
+    summary: 'Actualizar el estado del examen (BORRADOR, PUBLICADO, ARCHIVADO)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del examen' })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado del examen actualizado exitosamente.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'No se puede publicar un examen sin preguntas o estado inválido.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Examen no encontrado.',
+  })
+  async updateEstado(
+    @Param('id') id: string,
+    @Body() body: UpdateEstadoExamenDto,
+  ) {
+    return this.examenesService.updateEstado(id, body.estado);
   }
 
   /**

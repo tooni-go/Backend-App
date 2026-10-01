@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiService, GeneratedExam } from '../ai/ai.service';
+import { EstadoExamenEnum } from './dto/update-estado-examen.dto';
 import { RegenerarPreguntaDto, TipoAjuste } from './dto/regenerar-pregunta.dto';
 import { UpdateExamenDto } from './dto/update-examen.dto';
 import { DuplicarExamenDto } from './dto/duplicar-examen.dto';
@@ -58,6 +59,37 @@ export class ExamenesService {
     return examen;
   }
 
+  async updateEstado(id: string, estado: EstadoExamenEnum) {
+    const examen = await this.prisma.examen.findUnique({
+      where: { id },
+      include: { preguntas: true },
+    });
+
+    if (!examen) {
+      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+    }
+
+    // Validar que el examen tenga preguntas antes de pasar a PUBLICADO
+    if (
+      estado === EstadoExamenEnum.PUBLICADO &&
+      (!examen.preguntas || examen.preguntas.length === 0)
+    ) {
+      throw new BadRequestException(
+        'No se puede publicar un examen que no contiene preguntas.',
+      );
+    }
+
+    return this.prisma.examen.update({
+      where: { id },
+      data: { estado },
+      include: {
+        preguntas: true,
+        entregas: true,
+        curso: true,
+      },
+    });
+  }
+
   /**
    * Actualiza un examen existente y sincroniza su lista de preguntas.
    */
@@ -93,8 +125,9 @@ export class ExamenesService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const updateData: { titulo?: string; fecha?: Date } = {};
+      const updateData: { titulo?: string; fecha?: Date; puntajeTotal?: number } = {};
       if (dto.titulo !== undefined) updateData.titulo = dto.titulo;
+      if (dto.puntajeTotal !== undefined) updateData.puntajeTotal = dto.puntajeTotal;
       if (parsedFecha) updateData.fecha = parsedFecha;
 
       if (Object.keys(updateData).length > 0) {

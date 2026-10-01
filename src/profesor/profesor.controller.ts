@@ -12,7 +12,7 @@ import {
 @ApiTags('Profesor')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
-@Controller('api/v1/profesor')
+@Controller(['api/v1/profesor', 'profesor'])
 export class ProfesorController {
   constructor(private readonly profesorService: ProfesorService) {}
 
@@ -42,10 +42,7 @@ export class ProfesorController {
   @ApiResponse({ status: 200, description: 'Perfil actualizado exitosamente.' })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
   async updateProfile(@Body() body: UpdateProfesorDto, @Req() req?: any) {
-    return this.profesorService.updateProfile(
-      req?.user?.id || body,
-      req?.user?.id ? body : undefined,
-    );
+    return this.profesorService.updateProfile(body, req?.user?.id);
   }
 
   async updateMe(@Body() body: UpdateProfesorDto, @Req() req?: any) {

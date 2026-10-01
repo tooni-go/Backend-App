@@ -2,7 +2,7 @@ import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ReportesService } from './reportes.service';
 
-@Controller('api/v1/reportes')
+@Controller(['api/v1/reportes', 'reportes'])
 export class ReportesController {
   constructor(private readonly reportesService: ReportesService) {}
 

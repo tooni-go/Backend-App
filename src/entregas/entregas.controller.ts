@@ -26,7 +26,7 @@ const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
 const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 @ApiTags('Entregas')
-@Controller('api/v1/entregas')
+@Controller(['api/v1/entregas', 'entregas'])
 export class EntregasController {
   constructor(private readonly entregasService: EntregasService) {}
 
