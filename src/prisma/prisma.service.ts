@@ -12,14 +12,13 @@ export class PrismaService
 
   constructor() {
     const connectionString = process.env.DATABASE_URL;
-    const isRemote =
-      connectionString?.includes('render.com') ||
+    const isSsl =
       connectionString?.includes('sslmode=require') ||
-      process.env.NODE_ENV === 'production';
+      connectionString?.includes('render.com');
 
     const pool = new Pool({
       connectionString,
-      ...(isRemote ? { ssl: { rejectUnauthorized: false } } : {}),
+      ...(isSsl ? { ssl: { rejectUnauthorized: false } } : {}),
     });
     const adapter = new PrismaPg(pool);
     super({ adapter });

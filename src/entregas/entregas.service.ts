@@ -337,4 +337,69 @@ export class EntregasService {
       include: { correccion: true },
     });
   }
+
+  /**
+   * Reintenta la corrección por IA de una entrega que quedó en REQUIERE_REVISION.
+   */
+  async reintentarCorreccion(id: string) {
+    // 1. Buscar la entrega
+    const entrega = await this.prisma.entrega.findUnique({
+      where: { id },
+    });
+
+    if (!entrega) {
+      throw new NotFoundException(`Entrega con ID ${id} no encontrada.`);
+    }
+
+    // 2. Verificar que esté en REQUIERE_REVISION
+    if (entrega.estado !== 'REQUIERE_REVISION') {
+      throw new BadRequestException(
+        `Solo se puede reintentar la corrección en entregas con estado REQUIERE_REVISION. Estado actual: ${entrega.estado}`,
+      );
+    }
+
+    // 3. Leer el archivo del disco
+    const filename = entrega.archivo.replace(/^uploads[\\/]/, '');
+    const uploadsDir = this.getUploadsDir();
+    const filePath = join(uploadsDir, filename);
+
+    if (!fs.existsSync(filePath)) {
+      throw new BadRequestException(
+        'No se encontró el archivo original de la entrega en el servidor.',
+      );
+    }
+
+    const fileBuffer = fs.readFileSync(filePath);
+
+    // 4. Detectar mimeType a partir de la extensión
+    const ext = filename.split('.').pop()?.toLowerCase();
+    let mimeType = 'application/octet-stream';
+    if (ext === 'pdf') {
+      mimeType = 'application/pdf';
+    } else if (ext === 'jpg' || ext === 'jpeg') {
+      mimeType = 'image/jpeg';
+    } else if (ext === 'png') {
+      mimeType = 'image/png';
+    } else if (ext === 'webp') {
+      mimeType = 'image/webp';
+    }
+
+    // 5. Lanzar processCorrectionBackground en segundo plano
+    this.processCorrectionBackground(
+      entrega.id,
+      fileBuffer,
+      mimeType,
+    ).catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Error en reintento de corrección background: ${msg}`);
+    });
+
+    // 6. Retornar respuesta
+    return {
+      message: 'Reintento de corrección iniciado.',
+      entregaId: id,
+      estado: 'PROCESANDO',
+    };
+  }
 }
+

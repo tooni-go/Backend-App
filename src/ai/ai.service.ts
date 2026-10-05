@@ -3,9 +3,11 @@ import {
   Logger,
   BadRequestException,
   InternalServerErrorException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { GoogleGenAI } from '@google/genai';
 import { z } from 'zod';
+import * as pdfParse from 'pdf-parse';
 import {
   AiResilienceService,
   FallbackEventDetails,
@@ -126,6 +128,7 @@ export interface OpenRouterModelOption {
   proveedor: string;
   descripcion: string;
   esMultimodal: boolean;
+  soportaPdfDataUrl: boolean;
 }
 
 export interface GeminiPrincipalConfig {
@@ -147,6 +150,7 @@ export const OPENROUTER_HOMOLOGATED_MODELS: OpenRouterModelOption[] = [
     proveedor: 'OpenAI',
     descripcion: 'Rápido y económico, balance óptimo para MVP.',
     esMultimodal: true,
+    soportaPdfDataUrl: false,
   },
   {
     id: 'anthropic/claude-3.5-sonnet',
@@ -154,6 +158,7 @@ export const OPENROUTER_HOMOLOGATED_MODELS: OpenRouterModelOption[] = [
     proveedor: 'Anthropic',
     descripcion: 'Excelente razonamiento pedagógico y análisis visual.',
     esMultimodal: true,
+    soportaPdfDataUrl: true,
   },
   {
     id: 'meta-llama/llama-3.3-70b-instruct',
@@ -161,6 +166,7 @@ export const OPENROUTER_HOMOLOGATED_MODELS: OpenRouterModelOption[] = [
     proveedor: 'Meta',
     descripcion: 'Alternativa open-source de alta performance para texto.',
     esMultimodal: false,
+    soportaPdfDataUrl: false,
   },
   {
     id: 'google/gemini-2.0-flash-001',
@@ -168,17 +174,69 @@ export const OPENROUTER_HOMOLOGATED_MODELS: OpenRouterModelOption[] = [
     proveedor: 'Google',
     descripcion: 'Respaldo alternativo de alta velocidad y multimodal.',
     esMultimodal: true,
+    soportaPdfDataUrl: true,
   },
 ];
 
 @Injectable()
-export class AiService {
+export class AiService implements OnModuleInit {
   private readonly logger = new Logger(AiService.name);
+
+  /**
+   * Modelo de respaldo activo de OpenRouter.
+   * Si el modelo configurado no admite PDFs como data-URL (soportaPdfDataUrl: false, ej. gpt-4o-mini),
+   * el sistema extrae automáticamente el texto del PDF mediante un parser local y lo incorpora al prompt antes de enviarlo.
+   */
   private activeOpenRouterModel: string =
     process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini';
   private isModelOverridden = false;
 
   constructor(private readonly aiResilienceService: AiResilienceService) {}
+
+  /**
+   * Ciclo de vida NestJS: Valida proactivamente la presencia de las credenciales de IA al iniciar el módulo.
+   */
+  onModuleInit(): void {
+    this.validateCredentials();
+  }
+
+  /**
+   * Valida la presencia y consistencia de las API keys de Gemini y OpenRouter.
+   * No lanza excepciones para no interrumpir el arranque en desarrollo local o tareas administrativas.
+   */
+  validateCredentials(): {
+    geminiConfigured: boolean;
+    openRouterConfigured: boolean;
+  } {
+    const geminiKey = process.env.GEMINI_API_KEY?.trim();
+    const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+
+    const hasGemini = Boolean(geminiKey && geminiKey.length > 0);
+    const hasOpenRouter = Boolean(openRouterKey && openRouterKey.length > 0);
+
+    if (!hasGemini && !hasOpenRouter) {
+      this.logger.error(
+        'ALERTA CRÍTICA: Ninguna credencial de IA configurada (faltan GEMINI_API_KEY y OPENROUTER_API_KEY). Todas las funciones de IA fallarán.',
+      );
+    } else if (!hasGemini) {
+      this.logger.warn(
+        'GEMINI_API_KEY no está configurada. El proveedor principal Gemini no estará disponible; el sistema dependerá exclusivamente de OpenRouter.',
+      );
+    } else if (!hasOpenRouter) {
+      this.logger.warn(
+        'OPENROUTER_API_KEY no está configurada. El proveedor secundario OpenRouter no estará disponible; el mecanismo de fallback quedará inhabilitado si Gemini falla.',
+      );
+    } else {
+      this.logger.log(
+        'Credenciales de IA validadas correctamente (Gemini y OpenRouter configurados).',
+      );
+    }
+
+    return {
+      geminiConfigured: hasGemini,
+      openRouterConfigured: hasOpenRouter,
+    };
+  }
 
   /**
    * Retorna una copia de las métricas de uso acumuladas en memoria.
@@ -641,7 +699,41 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
   }
 
   /**
+   * Determina si un modelo de OpenRouter soporta archivos PDF directamente como data-URL.
+   * Si el modelo no está en el catálogo homologado, retorna false de forma segura/conservadora.
+   */
+  private modelSupportsPdfDataUrl(modelId: string): boolean {
+    if (!modelId || typeof modelId !== 'string') {
+      return false;
+    }
+    const model = OPENROUTER_HOMOLOGATED_MODELS.find(
+      (m) => m.id === modelId.trim(),
+    );
+    return Boolean(model?.soportaPdfDataUrl);
+  }
+
+  /**
+   * Extrae texto plano de un documento PDF usando pdf-parse para modelos sin soporte nativo de PDF data-URL.
+   * Es una extracción local y determinística (sin llamadas a IA). Si falla, registra un warning y retorna cadena vacía sin arrojar excepciones.
+   */
+  private async extractPdfTextFallback(pdfBuffer: Buffer): Promise<string> {
+    try {
+      const pdfFn = (pdfParse as any).default || pdfParse;
+      const data = await pdfFn(pdfBuffer);
+      return (data?.text || '').trim();
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Fallo al extraer texto del PDF con parser local: ${msg}. Se continuará sin adjunto de texto.`,
+      );
+      return '';
+    }
+  }
+
+  /**
    * Invoca a OpenRouter API con el prompt y archivo proporcionados.
+   * Si el archivo es un PDF y el modelo activo no soporta PDF data-URL (ej. gpt-4o-mini),
+   * extrae el texto automáticamente y lo incorpora como texto en el mensaje.
    */
   private async invokeOpenRouterRaw(params: {
     prompt: string;
@@ -661,18 +753,45 @@ IMPORTANTE: Debes retornar EXCLUSIVAMENTE un objeto JSON válido que respete el 
       `Llamando a OpenRouter${params.logLabel ? ` para ${params.logLabel}` : ''} usando el modelo: ${modelName}...`,
     );
 
+    const isPdf = params.mimeType === 'application/pdf';
+    const supportsPdf = this.modelSupportsPdfDataUrl(modelName);
+
     const contents: Array<
       | { type: 'text'; text: string }
       | { type: 'image_url'; image_url: { url: string } }
-    > = [{ type: 'text', text: params.prompt }];
+    > = [];
 
-    if (params.fileBase64 && params.mimeType) {
-      contents.push({
-        type: 'image_url',
-        image_url: {
-          url: `data:${params.mimeType};base64,${params.fileBase64}`,
-        },
-      });
+    if (params.fileBase64 && isPdf && !supportsPdf) {
+      this.logger.log(
+        `Modelo '${modelName}' no admite PDF data-URL — extrayendo texto del PDF para incluirlo en prompt...`,
+      );
+      const pdfBuffer = Buffer.from(params.fileBase64, 'base64');
+      const extractedText = await this.extractPdfTextFallback(pdfBuffer);
+
+      let promptConTexto = params.prompt;
+      if (extractedText && extractedText.trim().length > 0) {
+        promptConTexto = `${params.prompt}\n\n[CONTENIDO DEL DOCUMENTO PDF EXTRAÍDO]:\n"""\n${extractedText.trim()}\n"""`;
+        this.logger.log(
+          `Modelo '${modelName}' no admite PDF data-URL — texto extraído (${extractedText.trim().length} caracteres) e incluido en prompt.`,
+        );
+      } else {
+        this.logger.warn(
+          `Modelo '${modelName}' no admite PDF data-URL y no se detectó texto extraíble. Continuando solo con el prompt original.`,
+        );
+      }
+
+      contents.push({ type: 'text', text: promptConTexto });
+    } else {
+      contents.push({ type: 'text', text: params.prompt });
+
+      if (params.fileBase64 && params.mimeType) {
+        contents.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${params.mimeType};base64,${params.fileBase64}`,
+          },
+        });
+      }
     }
 
     const body: Record<string, unknown> = {
