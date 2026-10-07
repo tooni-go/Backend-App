@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAlumnoDto, UpdateAlumnoDto } from './dto/alumno.dto';
@@ -10,8 +9,27 @@ import { CreateAlumnoDto, UpdateAlumnoDto } from './dto/alumno.dto';
 export class AlumnosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getAlumnos(cursoId?: string, page: number = 1, limit: number = 10) {
-    const where = cursoId ? { cursos: { some: { cursoId } } } : {};
+  /**
+   * Obtiene la lista de alumnos paginada, restringida a los cursos del profesor autenticado.
+   */
+  async getAlumnos(
+    profesorId: string,
+    cursoId?: string,
+    page: number = 1,
+    limit: number = 10,
+  ) {
+    if (cursoId) {
+      const curso = await this.prisma.curso.findFirst({
+        where: { id: cursoId, profesorId },
+      });
+      if (!curso) {
+        throw new NotFoundException('Curso no encontrado.');
+      }
+    }
+
+    const where = cursoId
+      ? { cursos: { some: { cursoId, curso: { profesorId } } } }
+      : { cursos: { some: { curso: { profesorId } } } };
 
     const total = await this.prisma.alumno.count({ where });
     const data = await this.prisma.alumno.findMany({
@@ -36,9 +54,25 @@ export class AlumnosService {
     };
   }
 
-  async getAlumno(id: string) {
-    const alumno = await this.prisma.alumno.findUnique({ where: { id } });
-    if (!alumno) throw new NotFoundException('El alumno no existe.');
+  /**
+   * Obtiene los datos de un alumno asegurando que pertenezca a un curso del docente.
+   */
+  async getAlumno(id: string, profesorId: string) {
+    const alumno = await this.prisma.alumno.findFirst({
+      where: {
+        id,
+        cursos: {
+          some: {
+            curso: { profesorId },
+          },
+        },
+      },
+    });
+
+    if (!alumno) {
+      throw new NotFoundException('Alumno no encontrado.');
+    }
+
     return {
       id: alumno.id,
       nombre: alumno.apellido
@@ -48,7 +82,19 @@ export class AlumnosService {
     };
   }
 
-  async createAlumno(dto: CreateAlumnoDto) {
+  /**
+   * Crea o asocia un alumno a un curso del docente.
+   */
+  async createAlumno(dto: CreateAlumnoDto, profesorId: string) {
+    if (dto.cursoId) {
+      const curso = await this.prisma.curso.findFirst({
+        where: { id: dto.cursoId, profesorId },
+      });
+      if (!curso) {
+        throw new NotFoundException('Curso no encontrado.');
+      }
+    }
+
     const parts = dto.nombre.trim().split(' ');
     const nombre = parts[0];
     const apellido = parts.slice(1).join(' ') || '';
@@ -56,6 +102,7 @@ export class AlumnosService {
     let alumno = await this.prisma.alumno.findUnique({
       where: { legajo: dto.legajo },
     });
+
     if (!alumno) {
       alumno = await this.prisma.alumno.create({
         data: {
@@ -89,11 +136,24 @@ export class AlumnosService {
     };
   }
 
-  async updateAlumno(id: string, dto: UpdateAlumnoDto) {
-    const alumnoExistente = await this.prisma.alumno.findUnique({
-      where: { id },
+  /**
+   * Actualiza un alumno existente validando pertenencia a cursos del docente.
+   */
+  async updateAlumno(id: string, dto: UpdateAlumnoDto, profesorId: string) {
+    const alumnoExistente = await this.prisma.alumno.findFirst({
+      where: {
+        id,
+        cursos: {
+          some: {
+            curso: { profesorId },
+          },
+        },
+      },
     });
-    if (!alumnoExistente) throw new NotFoundException('El alumno no existe.');
+
+    if (!alumnoExistente) {
+      throw new NotFoundException('Alumno no encontrado.');
+    }
 
     const dataToUpdate: any = {};
     if (dto.nombre) {
@@ -119,12 +179,60 @@ export class AlumnosService {
     };
   }
 
-  async deleteAlumno(id: string) {
-    try {
-      await this.prisma.alumno.delete({ where: { id } });
-      return { success: true };
-    } catch (e) {
-      throw new NotFoundException('El alumno no existe.');
+  /**
+   * Eliminación inteligente (Smart Unlink & Clean):
+   * Desvincula al alumno de los cursos del docente y, si no pertenece a ningún otro curso en la BD,
+   * elimina el registro físico para no dejar datos huérfanos.
+   */
+  async deleteAlumno(id: string, profesorId: string) {
+    const enlacesDocente = await this.prisma.alumnoCurso.findMany({
+      where: {
+        alumnoId: id,
+        curso: { profesorId },
+      },
+    });
+
+    if (!enlacesDocente || enlacesDocente.length === 0) {
+      throw new NotFoundException('Alumno no encontrado.');
     }
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Desvincular de los cursos del docente
+      await tx.alumnoCurso.deleteMany({
+        where: {
+          alumnoId: id,
+          curso: { profesorId },
+        },
+      });
+
+      // 2. Verificar si el alumno queda matriculado en otros cursos de la plataforma
+      const cursosRestantes = await tx.alumnoCurso.count({
+        where: { alumnoId: id },
+      });
+
+      if (cursosRestantes === 0) {
+        // Limpiar correcciones y entregas huérfanas antes de borrar el alumno
+        const entregasAlumno = await tx.entrega.findMany({
+          where: { alumnoId: id },
+          select: { id: true },
+        });
+
+        for (const entrega of entregasAlumno) {
+          await tx.correccion.deleteMany({
+            where: { entregaId: entrega.id },
+          });
+        }
+
+        await tx.entrega.deleteMany({
+          where: { alumnoId: id },
+        });
+
+        await tx.alumno.delete({
+          where: { id },
+        });
+      }
+
+      return { success: true };
+    });
   }
 }

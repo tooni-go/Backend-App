@@ -164,11 +164,17 @@ export class ReportesService {
   }
 
   /**
-   * Obtiene la estructura de datos para el reporte de un Examen específico.
+   * Obtiene la estructura de datos para el reporte de un Examen específico, validando pertenencia al docente.
    */
-  async getExamenReportData(examenId: string): Promise<ExamenReportData> {
-    const examen = await this.prisma.examen.findUnique({
-      where: { id: examenId },
+  async getExamenReportData(
+    examenId: string,
+    profesorId: string,
+  ): Promise<ExamenReportData> {
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id: examenId,
+        curso: { profesorId },
+      },
       include: {
         curso: true,
         entregas: {
@@ -185,7 +191,7 @@ export class ReportesService {
     });
 
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${examenId} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     const sortedEntregas = [...(examen.entregas || [])].sort((a, b) => {
@@ -275,11 +281,14 @@ export class ReportesService {
   }
 
   /**
-   * Obtiene la estructura de datos para el reporte consolidado de un Curso.
+   * Obtiene la estructura de datos para el reporte consolidado de un Curso, validando pertenencia al docente.
    */
-  async getCursoReportData(cursoId: string): Promise<CursoReportData> {
-    const curso = await this.prisma.curso.findUnique({
-      where: { id: cursoId },
+  async getCursoReportData(
+    cursoId: string,
+    profesorId: string,
+  ): Promise<CursoReportData> {
+    const curso = await this.prisma.curso.findFirst({
+      where: { id: cursoId, profesorId },
       include: {
         examenes: {
           orderBy: { fecha: 'asc' },
@@ -304,7 +313,7 @@ export class ReportesService {
     });
 
     if (!curso) {
-      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+      throw new NotFoundException(`Curso no encontrado.`);
     }
 
     const examenesInfo = [...(curso.examenes || [])]
@@ -411,12 +420,13 @@ export class ReportesService {
   }
 
   /**
-   * Genera el reporte CSV de un Examen con BOM UTF-8 y directiva sep=,
+   * Genera el reporte CSV de un Examen con BOM UTF-8 y directiva sep=,, validando pertenencia al docente.
    */
   async generateExamenCsv(
     examenId: string,
+    profesorId: string,
   ): Promise<{ filename: string; content: string; buffer: Buffer }> {
-    const data = await this.getExamenReportData(examenId);
+    const data = await this.getExamenReportData(examenId, profesorId);
     const filename = buildReportFilename(
       data.examen.curso.materia,
       data.examen.curso.division,
@@ -450,12 +460,13 @@ export class ReportesService {
   }
 
   /**
-   * Genera el reporte CSV consolidado de un Curso con BOM UTF-8 y directiva sep=,
+   * Genera el reporte CSV consolidado de un Curso con BOM UTF-8 y directiva sep=,, validando pertenencia al docente.
    */
   async generateCursoCsv(
     cursoId: string,
+    profesorId: string,
   ): Promise<{ filename: string; content: string; buffer: Buffer }> {
-    const data = await this.getCursoReportData(cursoId);
+    const data = await this.getCursoReportData(cursoId, profesorId);
     const filename = buildReportFilename(
       data.curso.materia,
       data.curso.division,
@@ -487,12 +498,13 @@ export class ReportesService {
   }
 
   /**
-   * Genera el reporte PDF de un Examen con diseño tabular y paginación.
+   * Genera el reporte PDF de un Examen con diseño tabular y paginación, validando pertenencia al docente.
    */
   async generateExamenPdf(
     examenId: string,
+    profesorId: string,
   ): Promise<{ filename: string; buffer: Buffer }> {
-    const data = await this.getExamenReportData(examenId);
+    const data = await this.getExamenReportData(examenId, profesorId);
     const filename = buildReportFilename(
       data.examen.curso.materia,
       data.examen.curso.division,
@@ -627,12 +639,13 @@ export class ReportesService {
   }
 
   /**
-   * Genera el reporte PDF consolidado de un Curso con diseño horizontal/landscape.
+   * Genera el reporte PDF consolidado de un Curso con diseño horizontal/landscape, validando pertenencia al docente.
    */
   async generateCursoPdf(
     cursoId: string,
+    profesorId: string,
   ): Promise<{ filename: string; buffer: Buffer }> {
-    const data = await this.getCursoReportData(cursoId);
+    const data = await this.getCursoReportData(cursoId, profesorId);
     const filename = buildReportFilename(
       data.curso.materia,
       data.curso.division,

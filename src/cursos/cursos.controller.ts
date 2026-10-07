@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   UseGuards,
-  Req,
 } from '@nestjs/common';
 import {
   CursosService,
@@ -15,6 +14,7 @@ import {
   UpdateCursoDto,
 } from './cursos.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -52,8 +52,11 @@ export class CursosController {
     status: 401,
     description: 'No autorizado (token JWT faltante o expirado).',
   })
-  async createCurso(@Body() body: CreateCursoDto, @Req() req: any) {
-    return this.cursosService.createCurso(body, req.user.id);
+  async createCurso(
+    @Body() body: CreateCursoDto,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.cursosService.createCurso(body, profesorId);
   }
 
   @Get()
@@ -65,8 +68,8 @@ export class CursosController {
     description: 'Lista de cursos retornada con éxito.',
   })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
-  async getCursos(@Req() req: any) {
-    return this.cursosService.getCursos(req.user.id);
+  async getCursos(@CurrentUser('id') profesorId: string) {
+    return this.cursosService.getCursos(profesorId);
   }
 
   @Put(':id')
@@ -85,13 +88,12 @@ export class CursosController {
   })
   @ApiResponse({ status: 200, description: 'Curso actualizado exitosamente.' })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
-  @ApiResponse({ status: 403, description: 'No tienes permiso.' })
   async updateCurso(
     @Param('id') id: string,
     @Body() body: UpdateCursoDto,
-    @Req() req: any,
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.cursosService.updateCurso(id, body, req.user.id);
+    return this.cursosService.updateCurso(id, body, profesorId);
   }
 
   @Delete(':id')
@@ -99,14 +101,23 @@ export class CursosController {
   @ApiParam({ name: 'id', description: 'ID del curso' })
   @ApiResponse({ status: 200, description: 'Curso eliminado exitosamente.' })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
-  @ApiResponse({ status: 403, description: 'No tienes permiso.' })
-  async deleteCurso(@Param('id') id: string, @Req() req: any) {
-    return this.cursosService.deleteCurso(id, req.user.id);
+  async deleteCurso(
+    @Param('id') id: string,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.cursosService.deleteCurso(id, profesorId);
   }
 
   @Get(':id')
-  async getCurso(@Param('id') id: string) {
-    return this.cursosService.getCurso(id);
+  @ApiOperation({ summary: 'Obtener detalle de un curso' })
+  @ApiParam({ name: 'id', description: 'ID del curso' })
+  @ApiResponse({ status: 200, description: 'Detalle del curso retornado con éxito.' })
+  @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
+  async getCurso(
+    @Param('id') id: string,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.cursosService.getCurso(id, profesorId);
   }
 
   @Post(':id/alumnos')
@@ -131,8 +142,9 @@ export class CursosController {
   async registerStudent(
     @Param('id') cursoId: string,
     @Body() body: { nombre: string; apellido: string; legajo: string },
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.cursosService.addAlumnoToCurso(cursoId, body);
+    return this.cursosService.addAlumnoToCurso(cursoId, body, profesorId);
   }
 
   @Post(':id/examenes')
@@ -189,8 +201,9 @@ export class CursosController {
         esEvaluacionVisual?: boolean;
       }>;
     },
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.cursosService.createExamen(cursoId, body);
+    return this.cursosService.createExamen(cursoId, body, profesorId);
   }
 
   @Post(':id/alumnos/importar-masivo')
@@ -220,10 +233,12 @@ export class CursosController {
     status: 201,
     description: 'Reporte de la importación masiva.',
   })
+  @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
   async importStudentsMassive(
     @Param('id') cursoId: string,
     @Body() body: { alumnos: Array<{ nombre: string; apellido: string; legajo: string; email?: string }> },
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.cursosService.importarAlumnosMasivo(cursoId, body.alumnos);
+    return this.cursosService.importarAlumnosMasivo(cursoId, body.alumnos, profesorId);
   }
 }

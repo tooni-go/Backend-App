@@ -12,9 +12,11 @@ describe('ReportesService', () => {
 
   const mockPrismaService = {
     examen: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
     curso: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
   };
@@ -151,20 +153,20 @@ describe('ReportesService', () => {
     };
 
     it('debe lanzar NotFoundException si el examen no existe', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(null);
+      mockPrismaService.examen.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getExamenReportData('examen-inexistente'),
+        service.getExamenReportData('examen-inexistente', 'prof-1'),
       ).rejects.toThrow(NotFoundException);
       await expect(
-        service.getExamenReportData('examen-inexistente'),
-      ).rejects.toThrow('Examen con ID examen-inexistente no encontrado.');
+        service.getExamenReportData('examen-inexistente', 'prof-1'),
+      ).rejects.toThrow('Examen no encontrado.');
     });
 
     it('retorna filas con notas publicadas y marca explícitamente "Sin publicar" en entregas no publicadas', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(mockExamenData);
+      mockPrismaService.examen.findFirst.mockResolvedValue(mockExamenData);
 
-      const result = await service.getExamenReportData('exam-1');
+      const result = await service.getExamenReportData('exam-1', 'prof-1');
 
       expect(result.examen.titulo).toBe('Parcial 1');
       expect(result.filas).toHaveLength(3);
@@ -188,7 +190,7 @@ describe('ReportesService', () => {
     });
 
     it('debe generar reporte correctamente para un examen sin entregas (caso vacío válido)', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({
+      mockPrismaService.examen.findFirst.mockResolvedValue({
         id: 'exam-1',
         titulo: 'Primer Parcial',
         fecha: new Date('2026-05-10T10:00:00.000Z'),
@@ -202,7 +204,7 @@ describe('ReportesService', () => {
         entregas: [],
       });
 
-      const report = await service.getExamenReportData('exam-1');
+      const report = await service.getExamenReportData('exam-1', 'prof-1');
 
       expect(report.metadata.tituloExamen).toBe('Primer Parcial');
       expect(report.metadata.materia).toBe('Química');
@@ -295,20 +297,20 @@ describe('ReportesService', () => {
     };
 
     it('debe lanzar NotFoundException si el curso no existe', async () => {
-      mockPrismaService.curso.findUnique.mockResolvedValue(null);
+      mockPrismaService.curso.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.getCursoReportData('curso-inexistente'),
+        service.getCursoReportData('curso-inexistente', 'prof-1'),
       ).rejects.toThrow(NotFoundException);
       await expect(
-        service.getCursoReportData('curso-inexistente'),
-      ).rejects.toThrow('Curso con ID curso-inexistente no encontrado.');
+        service.getCursoReportData('curso-inexistente', 'prof-1'),
+      ).rejects.toThrow('Curso no encontrado.');
     });
 
     it('calcula el promedio únicamente sobre notas publicadas y devuelve "Sin datos" si el alumno no tiene notas publicadas', async () => {
-      mockPrismaService.curso.findUnique.mockResolvedValue(mockCursoData);
+      mockPrismaService.curso.findFirst.mockResolvedValue(mockCursoData);
 
-      const result = await service.getCursoReportData('curso-1');
+      const result = await service.getCursoReportData('curso-1', 'prof-1');
 
       expect(result.examenes).toHaveLength(2);
       expect(result.filas).toHaveLength(3);
@@ -333,7 +335,7 @@ describe('ReportesService', () => {
     });
 
     it('debe generar reporte vacío si el curso no tiene alumnos ni exámenes', async () => {
-      mockPrismaService.curso.findUnique.mockResolvedValue({
+      mockPrismaService.curso.findFirst.mockResolvedValue({
         id: 'curso-vacio',
         materia: 'Historia',
         division: 'C',
@@ -343,7 +345,7 @@ describe('ReportesService', () => {
         examenes: [],
       });
 
-      const report = await service.getCursoReportData('curso-vacio');
+      const report = await service.getCursoReportData('curso-vacio', 'prof-1');
 
       expect(report.headers).toEqual([
         'Legajo',
@@ -421,12 +423,12 @@ describe('ReportesService', () => {
     };
 
     beforeEach(() => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(mockSampleExamen);
-      mockPrismaService.curso.findUnique.mockResolvedValue(mockSampleCurso);
+      mockPrismaService.examen.findFirst.mockResolvedValue(mockSampleExamen);
+      mockPrismaService.curso.findFirst.mockResolvedValue(mockSampleCurso);
     });
 
     it('generateExamenCsv debe incluir el BOM UTF-8 (\uFEFF) y sep=, al inicio del archivo', async () => {
-      const result = await service.generateExamenCsv('exam-sample');
+      const result = await service.generateExamenCsv('exam-sample', 'prof-1');
 
       expect(result.filename).toBe('notas-algebra-a-2026-05-15.csv');
       expect(result.buffer).toBeInstanceOf(Buffer);
@@ -441,7 +443,7 @@ describe('ReportesService', () => {
     });
 
     it('generateCursoCsv debe generar el CSV con BOM y promedio correcto', async () => {
-      const result = await service.generateCursoCsv('curso-sample');
+      const result = await service.generateCursoCsv('curso-sample', 'prof-1');
 
       expect(result.filename.startsWith('notas-algebra-a-')).toBe(true);
       expect(result.filename.endsWith('.csv')).toBe(true);
@@ -458,7 +460,7 @@ describe('ReportesService', () => {
     });
 
     it('generateExamenPdf debe generar un buffer PDF válido con cabecera %PDF', async () => {
-      const result = await service.generateExamenPdf('exam-sample');
+      const result = await service.generateExamenPdf('exam-sample', 'prof-1');
 
       expect(result.filename).toBe('notas-algebra-a-2026-05-15.pdf');
       expect(result.buffer).toBeInstanceOf(Buffer);
@@ -469,7 +471,7 @@ describe('ReportesService', () => {
     });
 
     it('generateCursoPdf debe generar un buffer PDF válido', async () => {
-      const result = await service.generateCursoPdf('curso-sample');
+      const result = await service.generateCursoPdf('curso-sample', 'prof-1');
 
       expect(result.filename.startsWith('notas-algebra-a-')).toBe(true);
       expect(result.filename.endsWith('.pdf')).toBe(true);

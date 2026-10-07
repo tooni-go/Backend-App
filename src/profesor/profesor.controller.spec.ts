@@ -37,22 +37,22 @@ describe('ProfesorController', () => {
   });
 
   it('GET /api/v1/profesor/me retorna el perfil del profesor', async () => {
-    const res = await controller.getMe();
+    const res = await controller.getMe('prof-1');
     expect(res).toEqual({
       id: 'prof-1',
       nombre: 'Profesor',
       apellido: 'Titular',
       email: 'profesor@evalia.com',
     });
-    expect(mockProfesorService.getProfile).toHaveBeenCalled();
+    expect(mockProfesorService.getProfile).toHaveBeenCalledWith('prof-1');
   });
 
   it('PUT /api/v1/profesor/me actualiza el perfil del profesor', async () => {
-    const res = await controller.updateMe({ nombre: 'Nuevo', apellido: 'Nombre' });
+    const res = await controller.updateMe({ nombre: 'Nuevo', apellido: 'Nombre' }, 'prof-1');
     expect(res.nombre).toBe('Nuevo');
     expect(mockProfesorService.updateProfile).toHaveBeenCalledWith(
       { nombre: 'Nuevo', apellido: 'Nombre' },
-      undefined,
+      'prof-1',
     );
   });
 });

@@ -14,6 +14,7 @@ describe('ExamenesService - regenerarPregunta', () => {
 
   const mockPrismaService: any = {
     examen: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
@@ -31,6 +32,7 @@ describe('ExamenesService - regenerarPregunta', () => {
       deleteMany: jest.fn(),
     },
     curso: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
     $transaction: jest.fn((cb) => cb(mockPrismaService)),
@@ -302,18 +304,18 @@ describe('ExamenesService - regenerarPregunta', () => {
 
   describe('getMetricasExamen', () => {
     it('debe lanzar NotFoundException si el examen no existe', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue(null);
+      mockPrismaService.examen.findFirst.mockResolvedValue(null);
 
-      await expect(service.getMetricasExamen('no-existe')).rejects.toThrow(
+      await expect(service.getMetricasExamen('no-existe', 'prof-1')).rejects.toThrow(
         NotFoundException,
       );
-      await expect(service.getMetricasExamen('no-existe')).rejects.toThrow(
-        'Examen con ID no-existe no encontrado.',
+      await expect(service.getMetricasExamen('no-existe', 'prof-1')).rejects.toThrow(
+        'Examen no encontrado.',
       );
     });
 
     it('debe retornar métricas con nulls cuando no hay entregas publicadas', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({
+      mockPrismaService.examen.findFirst.mockResolvedValue({
         id: 'ex-1',
         titulo: 'Examen Sin Entregas',
         curso: {
@@ -349,7 +351,7 @@ describe('ExamenesService - regenerarPregunta', () => {
         ],
       });
 
-      const result = await service.getMetricasExamen('ex-1');
+      const result = await service.getMetricasExamen('ex-1', 'prof-1');
 
       expect(result).toEqual({
         examenId: 'ex-1',
@@ -383,7 +385,7 @@ describe('ExamenesService - regenerarPregunta', () => {
     });
 
     it('debe calcular correctamente el promedio, máxima, mínima y porcentaje de aprobación', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({
+      mockPrismaService.examen.findFirst.mockResolvedValue({
         id: 'ex-1',
         titulo: 'Examen de Matemáticas',
         curso: {
@@ -428,7 +430,7 @@ describe('ExamenesService - regenerarPregunta', () => {
         ],
       });
 
-      const result = await service.getMetricasExamen('ex-1');
+      const result = await service.getMetricasExamen('ex-1', 'prof-1');
 
       expect(result.examenId).toBe('ex-1');
       expect(result.totalAlumnos).toBe(5);
@@ -441,7 +443,7 @@ describe('ExamenesService - regenerarPregunta', () => {
     });
 
     it('debe calcular el diagnóstico por pregunta parseando feedbackJSON correctamente', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({
+      mockPrismaService.examen.findFirst.mockResolvedValue({
         id: 'ex-1',
         titulo: 'Examen Diagnóstico',
         curso: { alumnos: [{ alumnoId: 'a-1' }, { alumnoId: 'a-2' }] },
@@ -475,7 +477,7 @@ describe('ExamenesService - regenerarPregunta', () => {
         ],
       });
 
-      const result = await service.getMetricasExamen('ex-1');
+      const result = await service.getMetricasExamen('ex-1', 'prof-1');
 
       expect(result.diagnosticoPorPregunta).toEqual([
         {
@@ -498,7 +500,7 @@ describe('ExamenesService - regenerarPregunta', () => {
     });
 
     it('debe skipear silenciosamente preguntas sin datos en feedbackJSON', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({
+      mockPrismaService.examen.findFirst.mockResolvedValue({
         id: 'ex-1',
         titulo: 'Examen con Datos Faltantes',
         curso: { alumnos: [{ alumnoId: 'a-1' }, { alumnoId: 'a-2' }] },
@@ -528,7 +530,7 @@ describe('ExamenesService - regenerarPregunta', () => {
         ],
       });
 
-      const result = await service.getMetricasExamen('ex-1');
+      const result = await service.getMetricasExamen('ex-1', 'prof-1');
 
       expect(result.diagnosticoPorPregunta).toEqual([
         {
@@ -553,32 +555,33 @@ describe('ExamenesService - regenerarPregunta', () => {
 
   describe('updateExamen', () => {
     it('debe lanzar NotFoundException si el examen a editar no existe', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce(null);
 
       await expect(
-        service.updateExamen('inexistente', { titulo: 'Nuevo Título' }),
+        service.updateExamen('inexistente', { titulo: 'Nuevo Título' }, 'prof-1'),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('debe actualizar título y sincronizar preguntas en una transacción', async () => {
-      mockPrismaService.examen.findUnique
+      mockPrismaService.examen.findFirst
         .mockResolvedValueOnce({
           id: 'ex-1',
           titulo: 'Título Viejo',
           preguntas: [{ id: 'p-old' }],
-        })
-        .mockResolvedValueOnce({
-          id: 'ex-1',
-          titulo: 'Título Nuevo',
-          preguntas: [
-            {
-              id: 'p-new-1',
-              enunciado: 'Pregunta Actualizada',
-              respuestaEsperada: 'Respuesta Actualizada',
-              puntajeMaximo: 10,
-            },
-          ],
         });
+
+      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+        id: 'ex-1',
+        titulo: 'Título Nuevo',
+        preguntas: [
+          {
+            id: 'p-new-1',
+            enunciado: 'Pregunta Actualizada',
+            respuestaEsperada: 'Respuesta Actualizada',
+            puntajeMaximo: 10,
+          },
+        ],
+      });
 
       mockPrismaService.examen.update.mockResolvedValue({});
       mockPrismaService.pregunta.deleteMany.mockResolvedValue({});
@@ -593,7 +596,7 @@ describe('ExamenesService - regenerarPregunta', () => {
             puntajeMaximo: 10,
           },
         ],
-      });
+      }, 'prof-1');
 
       expect(mockPrismaService.examen.update).toHaveBeenCalledWith({
         where: { id: 'ex-1' },
@@ -620,15 +623,15 @@ describe('ExamenesService - regenerarPregunta', () => {
 
   describe('deleteExamen', () => {
     it('debe lanzar NotFoundException si el examen a eliminar no existe', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.deleteExamen('inexistente')).rejects.toThrow(
+      await expect(service.deleteExamen('inexistente', 'prof-1')).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('debe eliminar correcciones, entregas, preguntas y el examen en cascada', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce({
         id: 'ex-delete',
       });
       mockPrismaService.correccion.deleteMany.mockResolvedValue({});
@@ -636,7 +639,7 @@ describe('ExamenesService - regenerarPregunta', () => {
       mockPrismaService.pregunta.deleteMany.mockResolvedValue({});
       mockPrismaService.examen.delete.mockResolvedValue({});
 
-      const result = await service.deleteExamen('ex-delete');
+      const result = await service.deleteExamen('ex-delete', 'prof-1');
 
       expect(mockPrismaService.correccion.deleteMany).toHaveBeenCalled();
       expect(mockPrismaService.entrega.deleteMany).toHaveBeenCalled();
@@ -653,15 +656,15 @@ describe('ExamenesService - regenerarPregunta', () => {
 
   describe('duplicarExamen', () => {
     it('debe lanzar NotFoundException si el examen fuente no existe', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce(null);
 
-      await expect(service.duplicarExamen('inexistente')).rejects.toThrow(
+      await expect(service.duplicarExamen('inexistente', undefined, 'prof-1')).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('debe duplicar el examen y sus preguntas en el curso destino', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce({
         id: 'ex-orig',
         titulo: 'Parcial 1',
         cursoId: 'c-1',
@@ -675,9 +678,10 @@ describe('ExamenesService - regenerarPregunta', () => {
           },
         ],
       });
-      mockPrismaService.curso.findUnique.mockResolvedValueOnce({
+      mockPrismaService.curso.findFirst.mockResolvedValueOnce({
         id: 'c-2',
         materia: 'Matemática',
+        profesorId: 'prof-1',
       });
       mockPrismaService.examen.create.mockResolvedValueOnce({
         id: 'ex-copy',
@@ -688,7 +692,7 @@ describe('ExamenesService - regenerarPregunta', () => {
 
       const result = await service.duplicarExamen('ex-orig', {
         cursoDestinoId: 'c-2',
-      });
+      }, 'prof-1');
 
       expect(mockPrismaService.examen.create).toHaveBeenCalledWith({
         data: expect.objectContaining({

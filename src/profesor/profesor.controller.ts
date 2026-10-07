@@ -1,6 +1,7 @@
-import { Controller, Put, Get, Body, UseGuards, Req } from '@nestjs/common';
+import { Controller, Put, Get, Body, UseGuards } from '@nestjs/common';
 import { ProfesorService, UpdateProfesorDto } from './profesor.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -19,12 +20,19 @@ export class ProfesorController {
   @Get('me')
   @ApiOperation({ summary: 'Obtener perfil del profesor autenticado' })
   @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente.' })
-  async getProfile(@Req() req?: any) {
-    return this.profesorService.getProfile(req?.user?.id);
+  @ApiResponse({ status: 401, description: 'No autorizado.' })
+  @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
+  async getMe(@CurrentUser('id') profesorId: string) {
+    return this.profesorService.getProfile(profesorId);
   }
 
-  async getMe(@Req() req?: any) {
-    return this.getProfile(req);
+  @Get('profile')
+  @ApiOperation({ summary: 'Obtener perfil del profesor autenticado (alias)' })
+  @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente.' })
+  @ApiResponse({ status: 401, description: 'No autorizado.' })
+  @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
+  async getProfile(@CurrentUser('id') profesorId: string) {
+    return this.profesorService.getProfile(profesorId);
   }
 
   @Put('me')
@@ -41,11 +49,23 @@ export class ProfesorController {
   })
   @ApiResponse({ status: 200, description: 'Perfil actualizado exitosamente.' })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
-  async updateProfile(@Body() body: UpdateProfesorDto, @Req() req?: any) {
-    return this.profesorService.updateProfile(body, req?.user?.id);
+  @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
+  async updateMe(
+    @Body() body: UpdateProfesorDto,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.profesorService.updateProfile(body, profesorId);
   }
 
-  async updateMe(@Body() body: UpdateProfesorDto, @Req() req?: any) {
-    return this.updateProfile(body, req);
+  @Put('profile')
+  @ApiOperation({ summary: 'Actualizar perfil del profesor autenticado (alias)' })
+  @ApiResponse({ status: 200, description: 'Perfil actualizado exitosamente.' })
+  @ApiResponse({ status: 401, description: 'No autorizado.' })
+  @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
+  async updateProfile(
+    @Body() body: UpdateProfesorDto,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.profesorService.updateProfile(body, profesorId);
   }
 }
