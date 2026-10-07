@@ -82,7 +82,12 @@ export class ExamenesService {
       },
       include: {
         preguntas: true,
-        entregas: true,
+        entregas: {
+          include: {
+            alumno: true,
+            correccion: true,
+          },
+        },
         curso: {
           include: {
             alumnos: {
@@ -100,7 +105,12 @@ export class ExamenesService {
         where: { id },
         include: {
           preguntas: true,
-          entregas: true,
+          entregas: {
+            include: {
+              alumno: true,
+              correccion: true,
+            },
+          },
           curso: {
             include: {
               alumnos: {

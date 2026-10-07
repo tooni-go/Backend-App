@@ -234,7 +234,7 @@ export class EntregasService {
     if (examenId) where.examenId = examenId;
     if (alumnoId) where.alumnoId = alumnoId;
 
-    return this.prisma.entrega.findMany({
+    let entregas = await this.prisma.entrega.findMany({
       where,
       include: {
         alumno: true,
@@ -244,6 +244,23 @@ export class EntregasService {
         correccion: true,
       },
     });
+
+    if (entregas.length === 0 && examenId) {
+      const fallbackWhere: any = { examenId };
+      if (alumnoId) fallbackWhere.alumnoId = alumnoId;
+      entregas = await this.prisma.entrega.findMany({
+        where: fallbackWhere,
+        include: {
+          alumno: true,
+          examen: {
+            include: { preguntas: true },
+          },
+          correccion: true,
+        },
+      });
+    }
+
+    return entregas;
   }
 
   /**
