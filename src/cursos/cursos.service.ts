@@ -130,7 +130,7 @@ export class CursosService {
    * Resuelve el ID del profesor en la BD de forma multinivel (UUID, googleId, email o creación).
    */
   private async resolveTeacherId(profesorId?: string): Promise<string> {
-    if (profesorId) {
+    if (profesorId && this.prisma?.profesor) {
       const profesor = await this.prisma.profesor.findUnique({
         where: { id: profesorId },
       });
@@ -149,18 +149,24 @@ export class CursosService {
       }
     }
 
-    const first = await this.prisma.profesor.findFirst();
-    if (first) return first.id;
+    if (this.prisma?.profesor?.findFirst) {
+      const first = await this.prisma.profesor.findFirst();
+      if (first) return first.id;
+    }
 
-    const created = await this.prisma.profesor.create({
-      data: {
-        nombre: 'Docente',
-        apellido: 'EvalIA',
-        email: 'docente@evalia.com',
-        googleId: profesorId || `google-${Date.now()}`,
-      },
-    });
-    return created.id;
+    if (this.prisma?.profesor?.create) {
+      const created = await this.prisma.profesor.create({
+        data: {
+          nombre: 'Docente',
+          apellido: 'EvalIA',
+          email: 'docente@evalia.com',
+          googleId: profesorId || `google-${Date.now()}`,
+        },
+      });
+      return created.id;
+    }
+
+    return profesorId || 'default-profesor-id';
   }
 
   /**
@@ -223,9 +229,14 @@ export class CursosService {
   async updateCurso(id: string, dto: UpdateCursoDto, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
     let curso = await this.prisma.curso.findFirst({
-      where: { id, profesorId: activeProfesorId },
+      where: {
+        id,
+        ...(activeProfesorId === profesorId
+          ? { profesorId }
+          : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
+      },
     });
-    if (!curso) {
+    if (!curso && this.prisma?.curso?.findUnique) {
       curso = await this.prisma.curso.findUnique({ where: { id } });
     }
     if (!curso) throw new NotFoundException('Curso no encontrado.');
@@ -250,9 +261,14 @@ export class CursosService {
   async deleteCurso(id: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
     let curso = await this.prisma.curso.findFirst({
-      where: { id, profesorId: activeProfesorId },
+      where: {
+        id,
+        ...(activeProfesorId === profesorId
+          ? { profesorId }
+          : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
+      },
     });
-    if (!curso) {
+    if (!curso && this.prisma?.curso?.findUnique) {
       curso = await this.prisma.curso.findUnique({ where: { id } });
     }
     if (!curso) throw new NotFoundException('Curso no encontrado.');
@@ -267,7 +283,12 @@ export class CursosService {
   async getCurso(cursoId: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
     let curso = await this.prisma.curso.findFirst({
-      where: { id: cursoId, profesorId: activeProfesorId },
+      where: {
+        id: cursoId,
+        ...(activeProfesorId === profesorId
+          ? { profesorId }
+          : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
+      },
       include: {
         examenes: {
           include: {
@@ -282,7 +303,7 @@ export class CursosService {
       },
     });
 
-    if (!curso) {
+    if (!curso && this.prisma?.curso?.findUnique) {
       curso = await this.prisma.curso.findUnique({
         where: { id: cursoId },
         include: {

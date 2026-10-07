@@ -21,7 +21,7 @@ export class ExamenesService {
    * Resuelve el ID del profesor en la BD de forma multinivel.
    */
   private async resolveTeacherId(profesorId?: string): Promise<string> {
-    if (profesorId) {
+    if (profesorId && this.prisma?.profesor) {
       const profesor = await this.prisma.profesor.findUnique({
         where: { id: profesorId },
       });
@@ -40,8 +40,10 @@ export class ExamenesService {
       }
     }
 
-    const first = await this.prisma.profesor.findFirst();
-    if (first) return first.id;
+    if (this.prisma?.profesor?.findFirst) {
+      const first = await this.prisma.profesor.findFirst();
+      if (first) return first.id;
+    }
 
     return profesorId || 'default-profesor-id';
   }
@@ -68,12 +70,15 @@ export class ExamenesService {
     let examen = await this.prisma.examen.findFirst({
       where: {
         id,
-        curso: {
-          OR: [
-            { profesorId: activeProfesorId },
-            { profesorId },
-          ],
-        },
+        curso:
+          activeProfesorId === profesorId
+            ? { profesorId }
+            : {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
       },
       include: {
         preguntas: true,
@@ -90,7 +95,7 @@ export class ExamenesService {
       },
     });
 
-    if (!examen) {
+    if (!examen && this.prisma?.examen?.findUnique) {
       examen = await this.prisma.examen.findUnique({
         where: { id },
         include: {
@@ -128,17 +133,20 @@ export class ExamenesService {
     let examen = await this.prisma.examen.findFirst({
       where: {
         id,
-        curso: {
-          OR: [
-            { profesorId: activeProfesorId },
-            { profesorId },
-          ],
-        },
+        curso:
+          activeProfesorId === profesorId
+            ? { profesorId }
+            : {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
       },
       include: { preguntas: true },
     });
 
-    if (!examen) {
+    if (!examen && this.prisma?.examen?.findUnique) {
       examen = await this.prisma.examen.findUnique({
         where: { id },
         include: { preguntas: true },
@@ -182,17 +190,20 @@ export class ExamenesService {
     let examenExistente = await this.prisma.examen.findFirst({
       where: {
         id,
-        curso: {
-          OR: [
-            { profesorId: activeProfesorId },
-            { profesorId },
-          ],
-        },
+        curso:
+          activeProfesorId === profesorId
+            ? { profesorId }
+            : {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
       },
       include: { preguntas: true },
     });
 
-    if (!examenExistente) {
+    if (!examenExistente && this.prisma?.examen?.findUnique) {
       examenExistente = await this.prisma.examen.findUnique({
         where: { id },
         include: { preguntas: true },
@@ -274,16 +285,19 @@ export class ExamenesService {
     let examen = await this.prisma.examen.findFirst({
       where: {
         id,
-        curso: {
-          OR: [
-            { profesorId: activeProfesorId },
-            { profesorId },
-          ],
-        },
+        curso:
+          activeProfesorId === profesorId
+            ? { profesorId }
+            : {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
       },
     });
 
-    if (!examen) {
+    if (!examen && this.prisma?.examen?.findUnique) {
       examen = await this.prisma.examen.findUnique({ where: { id } });
     }
 
@@ -328,17 +342,20 @@ export class ExamenesService {
     let examen = await this.prisma.examen.findFirst({
       where: {
         id,
-        curso: {
-          OR: [
-            { profesorId: activeProfesorId },
-            { profesorId },
-          ],
-        },
+        curso:
+          activeProfesorId === profesorId
+            ? { profesorId }
+            : {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
       },
       include: { preguntas: true },
     });
 
-    if (!examen) {
+    if (!examen && this.prisma?.examen?.findUnique) {
       examen = await this.prisma.examen.findUnique({
         where: { id },
         include: { preguntas: true },
@@ -354,14 +371,13 @@ export class ExamenesService {
     let cursoDestino = await this.prisma.curso.findFirst({
       where: {
         id: targetCourseId,
-        OR: [
-          { profesorId: activeProfesorId },
-          { profesorId },
-        ],
+        ...(activeProfesorId === profesorId
+          ? { profesorId }
+          : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
       },
     });
 
-    if (!cursoDestino) {
+    if (!cursoDestino && this.prisma?.curso?.findUnique) {
       cursoDestino = await this.prisma.curso.findUnique({
         where: { id: targetCourseId },
       });

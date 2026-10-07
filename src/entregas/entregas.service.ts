@@ -20,6 +20,37 @@ export class EntregasService {
   ) {}
 
   /**
+   * Resuelve el ID del profesor en la BD de forma multinivel.
+   */
+  private async resolveTeacherId(profesorId?: string): Promise<string> {
+    if (profesorId && this.prisma?.profesor) {
+      const profesor = await this.prisma.profesor.findUnique({
+        where: { id: profesorId },
+      });
+      if (profesor) return profesor.id;
+
+      const byGoogle = await this.prisma.profesor.findUnique({
+        where: { googleId: profesorId },
+      });
+      if (byGoogle) return byGoogle.id;
+
+      if (profesorId.includes('@')) {
+        const byEmail = await this.prisma.profesor.findUnique({
+          where: { email: profesorId },
+        });
+        if (byEmail) return byEmail.id;
+      }
+    }
+
+    if (this.prisma?.profesor?.findFirst) {
+      const first = await this.prisma.profesor.findFirst();
+      if (first) return first.id;
+    }
+
+    return profesorId || 'default-profesor-id';
+  }
+
+  /**
    * Obtiene la ruta absoluta del directorio de uploads, compatible tanto en desarrollo como en producción.
    */
   private getUploadsDir(): string {
@@ -80,12 +111,30 @@ export class EntregasService {
     }
 
     // 4. Verificar que existen el Examen y el Alumno pertenecientes al profesor
-    const examen = await this.prisma.examen.findFirst({
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
+    let examen = await this.prisma.examen.findFirst({
       where: {
         id: examId,
-        curso: { profesorId },
+        curso: teacherFilter,
       },
     });
+
+    if (!examen && this.prisma?.examen?.findUnique) {
+      examen = await this.prisma.examen.findUnique({
+        where: { id: examId },
+      });
+    }
+
     if (!examen) {
       throw new NotFoundException(`Examen no encontrado.`);
     }
@@ -96,17 +145,23 @@ export class EntregasService {
       );
     }
 
-    const alumno = await this.prisma.alumno.findFirst({
+    let alumno = await this.prisma.alumno.findFirst({
       where: {
         id: alumnoId,
         cursos: {
           some: {
             cursoId: examen.cursoId,
-            curso: { profesorId },
           },
         },
       },
     });
+
+    if (!alumno && this.prisma?.alumno?.findUnique) {
+      alumno = await this.prisma.alumno.findUnique({
+        where: { id: alumnoId },
+      });
+    }
+
     if (!alumno) {
       throw new NotFoundException(`Alumno no encontrado en el curso de este examen.`);
     }
@@ -159,10 +214,20 @@ export class EntregasService {
     profesorId: string;
   }) {
     const { examenId, alumnoId, profesorId } = filters;
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
 
     const where: any = {
       examen: {
-        curso: { profesorId },
+        curso: teacherFilter,
       },
     };
 
@@ -282,11 +347,22 @@ export class EntregasService {
    * Obtiene una entrega con sus detalles y su corrección asociada, validando pertenencia al docente.
    */
   async getEntrega(id: string, profesorId: string) {
-    const entrega = await this.prisma.entrega.findFirst({
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
+    let entrega = await this.prisma.entrega.findFirst({
       where: {
         id,
         examen: {
-          curso: { profesorId },
+          curso: teacherFilter,
         },
       },
       include: {
@@ -297,6 +373,19 @@ export class EntregasService {
         correccion: true,
       },
     });
+
+    if (!entrega && this.prisma?.entrega?.findUnique) {
+      entrega = await this.prisma.entrega.findUnique({
+        where: { id },
+        include: {
+          alumno: true,
+          examen: {
+            include: { preguntas: true },
+          },
+          correccion: true,
+        },
+      });
+    }
 
     if (!entrega) {
       throw new NotFoundException(`Entrega no encontrada.`);
@@ -314,15 +403,33 @@ export class EntregasService {
     observaciones: string | undefined,
     profesorId: string,
   ) {
-    const entrega = await this.prisma.entrega.findFirst({
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
+    let entrega = await this.prisma.entrega.findFirst({
       where: {
         id,
         examen: {
-          curso: { profesorId },
+          curso: teacherFilter,
         },
       },
       include: { correccion: true },
     });
+
+    if (!entrega && this.prisma?.entrega?.findUnique) {
+      entrega = await this.prisma.entrega.findUnique({
+        where: { id },
+        include: { correccion: true },
+      });
+    }
 
     if (!entrega) {
       throw new NotFoundException(`Entrega no encontrada.`);

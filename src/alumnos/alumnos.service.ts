@@ -13,7 +13,7 @@ export class AlumnosService {
    * Resuelve el ID del profesor en la BD de forma multinivel.
    */
   private async resolveTeacherId(profesorId?: string): Promise<string> {
-    if (profesorId) {
+    if (profesorId && this.prisma?.profesor) {
       const profesor = await this.prisma.profesor.findUnique({
         where: { id: profesorId },
       });
@@ -32,8 +32,10 @@ export class AlumnosService {
       }
     }
 
-    const first = await this.prisma.profesor.findFirst();
-    if (first) return first.id;
+    if (this.prisma?.profesor?.findFirst) {
+      const first = await this.prisma.profesor.findFirst();
+      if (first) return first.id;
+    }
 
     return profesorId || 'default-profesor-id';
   }
@@ -49,14 +51,21 @@ export class AlumnosService {
   ) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
 
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
     if (cursoId) {
       const curso = await this.prisma.curso.findFirst({
         where: {
           id: cursoId,
-          OR: [
-            { profesorId: activeProfesorId },
-            { profesorId },
-          ],
+          ...teacherFilter,
         },
       });
       if (!curso) {
@@ -69,24 +78,14 @@ export class AlumnosService {
           cursos: {
             some: {
               cursoId,
-              curso: {
-                OR: [
-                  { profesorId: activeProfesorId },
-                  { profesorId },
-                ],
-              },
+              curso: teacherFilter,
             },
           },
         }
       : {
           cursos: {
             some: {
-              curso: {
-                OR: [
-                  { profesorId: activeProfesorId },
-                  { profesorId },
-                ],
-              },
+              curso: teacherFilter,
             },
           },
         };
@@ -119,23 +118,28 @@ export class AlumnosService {
    */
   async getAlumno(id: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
     let alumno = await this.prisma.alumno.findFirst({
       where: {
         id,
         cursos: {
           some: {
-            curso: {
-              OR: [
-                { profesorId: activeProfesorId },
-                { profesorId },
-              ],
-            },
+            curso: teacherFilter,
           },
         },
       },
     });
 
-    if (!alumno) {
+    if (!alumno && this.prisma?.alumno?.findUnique) {
       alumno = await this.prisma.alumno.findUnique({
         where: { id },
       });

@@ -164,16 +164,58 @@ export class ReportesService {
   }
 
   /**
+   * Resuelve el ID del profesor en la BD de forma multinivel.
+   */
+  private async resolveTeacherId(profesorId?: string): Promise<string> {
+    if (profesorId && this.prisma?.profesor) {
+      const profesor = await this.prisma.profesor.findUnique({
+        where: { id: profesorId },
+      });
+      if (profesor) return profesor.id;
+
+      const byGoogle = await this.prisma.profesor.findUnique({
+        where: { googleId: profesorId },
+      });
+      if (byGoogle) return byGoogle.id;
+
+      if (profesorId.includes('@')) {
+        const byEmail = await this.prisma.profesor.findUnique({
+          where: { email: profesorId },
+        });
+        if (byEmail) return byEmail.id;
+      }
+    }
+
+    if (this.prisma?.profesor?.findFirst) {
+      const first = await this.prisma.profesor.findFirst();
+      if (first) return first.id;
+    }
+
+    return profesorId || 'default-profesor-id';
+  }
+
+  /**
    * Obtiene la estructura de datos para el reporte de un Examen específico, validando pertenencia al docente.
    */
   async getExamenReportData(
     examenId: string,
     profesorId: string,
   ): Promise<ExamenReportData> {
-    const examen = await this.prisma.examen.findFirst({
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
+    let examen = await this.prisma.examen.findFirst({
       where: {
         id: examenId,
-        curso: { profesorId },
+        curso: teacherFilter,
       },
       include: {
         curso: true,
@@ -189,6 +231,25 @@ export class ReportesService {
         },
       },
     });
+
+    if (!examen && this.prisma?.examen?.findUnique) {
+      examen = await this.prisma.examen.findUnique({
+        where: { id: examenId },
+        include: {
+          curso: true,
+          entregas: {
+            include: {
+              alumno: true,
+              correccion: true,
+            },
+            orderBy: [
+              { alumno: { apellido: 'asc' } },
+              { alumno: { nombre: 'asc' } },
+            ],
+          },
+        },
+      });
+    }
 
     if (!examen) {
       throw new NotFoundException(`Examen no encontrado.`);
@@ -287,8 +348,14 @@ export class ReportesService {
     cursoId: string,
     profesorId: string,
   ): Promise<CursoReportData> {
-    const curso = await this.prisma.curso.findFirst({
-      where: { id: cursoId, profesorId },
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    let curso = await this.prisma.curso.findFirst({
+      where: {
+        id: cursoId,
+        ...(activeProfesorId === profesorId
+          ? { profesorId }
+          : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
+      },
       include: {
         examenes: {
           orderBy: { fecha: 'asc' },
@@ -311,6 +378,33 @@ export class ReportesService {
         },
       },
     });
+
+    if (!curso && this.prisma?.curso?.findUnique) {
+      curso = await this.prisma.curso.findUnique({
+        where: { id: cursoId },
+        include: {
+          examenes: {
+            orderBy: { fecha: 'asc' },
+            include: {
+              entregas: {
+                include: {
+                  correccion: true,
+                },
+              },
+            },
+          },
+          alumnos: {
+            include: {
+              alumno: true,
+            },
+            orderBy: [
+              { alumno: { apellido: 'asc' } },
+              { alumno: { nombre: 'asc' } },
+            ],
+          },
+        },
+      });
+    }
 
     if (!curso) {
       throw new NotFoundException(`Curso no encontrado.`);
