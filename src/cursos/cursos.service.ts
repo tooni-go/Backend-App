@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -87,36 +86,9 @@ export class CursosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Resuelve el ID del profesor o usa uno por defecto (para MVP local).
+   * Crea un nuevo curso asociado al profesor autenticado.
    */
-  async resolveTeacherId(headerTeacherId?: string): Promise<string> {
-    if (headerTeacherId) {
-      const teacher = await this.prisma.profesor.findUnique({
-        where: { id: headerTeacherId },
-      });
-      if (teacher) {
-        return teacher.id;
-      }
-    }
-    let teacher = await this.prisma.profesor.findFirst();
-    if (!teacher) {
-      teacher = await this.prisma.profesor.create({
-        data: {
-          nombre: 'Profesor',
-          apellido: 'Default',
-          email: 'default@evalia.com',
-          googleId: 'default-google-id',
-        },
-      });
-    }
-    return teacher.id;
-  }
-
-  /**
-   * Crea un nuevo curso asociado a un profesor.
-   */
-  async createCurso(dto: CreateCursoDto, headerTeacherId?: string) {
-    const profesorId = await this.resolveTeacherId(headerTeacherId);
+  async createCurso(dto: CreateCursoDto, profesorId: string) {
     return this.prisma.curso.create({
       data: {
         materia: dto.materia,
@@ -129,10 +101,9 @@ export class CursosService {
   }
 
   /**
-   * Obtiene todos los cursos asociados a un profesor.
+   * Obtiene todos los cursos asociados al profesor autenticado.
    */
-  async getCursos(headerTeacherId?: string) {
-    const profesorId = await this.resolveTeacherId(headerTeacherId);
+  async getCursos(profesorId: string) {
     const cursos = await this.prisma.curso.findMany({
       where: { profesorId },
       include: {
@@ -160,14 +131,13 @@ export class CursosService {
   }
 
   /**
-   * Actualiza un curso existente.
+   * Actualiza un curso existente perteneciente al profesor autenticado.
    */
-  async updateCurso(id: string, dto: UpdateCursoDto, headerTeacherId?: string) {
-    const profesorId = await this.resolveTeacherId(headerTeacherId);
-    const curso = await this.prisma.curso.findUnique({ where: { id } });
-    if (!curso) throw new NotFoundException('Curso no encontrado');
-    if (curso.profesorId !== profesorId)
-      throw new ForbiddenException('No tienes permiso para editar este curso');
+  async updateCurso(id: string, dto: UpdateCursoDto, profesorId: string) {
+    const curso = await this.prisma.curso.findFirst({
+      where: { id, profesorId },
+    });
+    if (!curso) throw new NotFoundException('Curso no encontrado.');
 
     return this.prisma.curso.update({
       where: { id },
@@ -181,27 +151,24 @@ export class CursosService {
   }
 
   /**
-   * Elimina un curso.
+   * Elimina un curso perteneciente al profesor autenticado.
    */
-  async deleteCurso(id: string, headerTeacherId?: string) {
-    const profesorId = await this.resolveTeacherId(headerTeacherId);
-    const curso = await this.prisma.curso.findUnique({ where: { id } });
-    if (!curso) throw new NotFoundException('Curso no encontrado');
-    if (curso.profesorId !== profesorId)
-      throw new ForbiddenException(
-        'No tienes permiso para eliminar este curso',
-      );
+  async deleteCurso(id: string, profesorId: string) {
+    const curso = await this.prisma.curso.findFirst({
+      where: { id, profesorId },
+    });
+    if (!curso) throw new NotFoundException('Curso no encontrado.');
 
     await this.prisma.curso.delete({ where: { id } });
     return { success: true };
   }
 
   /**
-   * Obtiene un curso por ID con sus exámenes y alumnos.
+   * Obtiene un curso por ID con sus exámenes y alumnos, validando pertenencia al profesor autenticado.
    */
-  async getCurso(cursoId: string) {
-    const curso = await this.prisma.curso.findUnique({
-      where: { id: cursoId },
+  async getCurso(cursoId: string, profesorId: string) {
+    const curso = await this.prisma.curso.findFirst({
+      where: { id: cursoId, profesorId },
       include: {
         examenes: {
           include: {
@@ -216,20 +183,24 @@ export class CursosService {
       },
     });
     if (!curso) {
-      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+      throw new NotFoundException(`Curso no encontrado.`);
     }
     return curso;
   }
 
   /**
-   * Registra un alumno y lo asocia con un curso.
+   * Registra un alumno y lo asocia con un curso del profesor autenticado.
    */
-  async addAlumnoToCurso(cursoId: string, dto: RegisterAlumnoDto) {
-    const curso = await this.prisma.curso.findUnique({
-      where: { id: cursoId },
+  async addAlumnoToCurso(
+    cursoId: string,
+    dto: RegisterAlumnoDto,
+    profesorId: string,
+  ) {
+    const curso = await this.prisma.curso.findFirst({
+      where: { id: cursoId, profesorId },
     });
     if (!curso) {
-      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+      throw new NotFoundException(`Curso no encontrado.`);
     }
 
     let alumno = await this.prisma.alumno.findUnique({
@@ -264,14 +235,18 @@ export class CursosService {
   }
 
   /**
-   * Crea un examen para un curso junto con todas sus preguntas.
+   * Crea un examen para un curso perteneciente al profesor autenticado.
    */
-  async createExamen(cursoId: string, dto: CreateExamenDto) {
-    const curso = await this.prisma.curso.findUnique({
-      where: { id: cursoId },
+  async createExamen(
+    cursoId: string,
+    dto: CreateExamenDto,
+    profesorId: string,
+  ) {
+    const curso = await this.prisma.curso.findFirst({
+      where: { id: cursoId, profesorId },
     });
     if (!curso) {
-      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+      throw new NotFoundException(`Curso no encontrado.`);
     }
 
     return this.prisma.examen.create({
@@ -296,17 +271,18 @@ export class CursosService {
   }
 
   /**
-   * Importa alumnos masivamente a un curso.
+   * Importa alumnos masivamente a un curso del profesor autenticado.
    */
   async importarAlumnosMasivo(
     cursoId: string,
     alumnos: Array<{ nombre: string; apellido: string; legajo: string; email?: string }>,
+    profesorId: string,
   ) {
-    const curso = await this.prisma.curso.findUnique({
-      where: { id: cursoId },
+    const curso = await this.prisma.curso.findFirst({
+      where: { id: cursoId, profesorId },
     });
     if (!curso) {
-      throw new NotFoundException(`Curso con ID ${cursoId} no encontrado.`);
+      throw new NotFoundException(`Curso no encontrado.`);
     }
 
     let procesados = 0;

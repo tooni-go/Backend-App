@@ -9,11 +9,15 @@ import {
   UploadedFile,
   UseInterceptors,
   UseFilters,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { EntregasService } from './entregas.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   ApiTags,
+  ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiConsumes,
@@ -26,6 +30,8 @@ const MAX_UPLOAD_SIZE_MB = parseInt(process.env.MAX_UPLOAD_SIZE_MB || '10', 10);
 const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
 @ApiTags('Entregas')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard)
 @Controller(['api/v1/entregas', 'entregas'])
 export class EntregasController {
   constructor(private readonly entregasService: EntregasService) {}
@@ -79,19 +85,25 @@ export class EntregasController {
     @UploadedFile() file: Express.Multer.File,
     @Body('examId') examId: string,
     @Body('alumnoId') alumnoId: string,
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.entregasService.createEntrega(examId, alumnoId, file);
+    return this.entregasService.createEntrega(examId, alumnoId, file, profesorId);
   }
 
   /**
-   * Lista entregas filtradas por examenId o por alumnoId.
+   * Lista entregas filtradas por examenId o por alumnoId pertenecientes al docente.
    */
   @Get()
+  @ApiOperation({
+    summary: 'Listar entregas del docente autenticado',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de entregas retornada con éxito.' })
   async getEntregas(
+    @CurrentUser('id') profesorId: string,
     @Query('examenId') examenId?: string,
     @Query('alumnoId') alumnoId?: string,
   ) {
-    return this.entregasService.getEntregas({ examenId, alumnoId });
+    return this.entregasService.getEntregas({ examenId, alumnoId, profesorId });
   }
 
   /**
@@ -111,8 +123,11 @@ export class EntregasController {
     status: 404,
     description: 'Entrega no encontrada.',
   })
-  async getEntrega(@Param('id') id: string) {
-    return this.entregasService.getEntrega(id);
+  async getEntrega(
+    @Param('id') id: string,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.entregasService.getEntrega(id, profesorId);
   }
 
   /**
@@ -150,11 +165,13 @@ export class EntregasController {
   async approveEntrega(
     @Param('id') id: string,
     @Body() body: { notaFinal: number; observaciones?: string },
+    @CurrentUser('id') profesorId: string,
   ) {
     return this.entregasService.approveEntrega(
       id,
       body.notaFinal,
       body.observaciones,
+      profesorId,
     );
   }
 }

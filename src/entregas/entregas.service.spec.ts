@@ -19,13 +19,16 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
 
   const mockPrismaService = {
     examen: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
     alumno: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
     entrega: {
       create: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
@@ -75,64 +78,65 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
 
     it('lanza BadRequestException si falta examId o alumnoId o file', async () => {
       await expect(
-        service.createEntrega('', 'alumno-1', mockFile),
+        service.createEntrega('', 'alumno-1', mockFile, 'prof-1'),
       ).rejects.toThrow(BadRequestException);
 
       await expect(
-        service.createEntrega('exam-1', '', mockFile),
+        service.createEntrega('exam-1', '', mockFile, 'prof-1'),
       ).rejects.toThrow(BadRequestException);
 
       await expect(
-        service.createEntrega('exam-1', 'alumno-1', null as any),
+        service.createEntrega('exam-1', 'alumno-1', null as any, 'prof-1'),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('lanza BadRequestException si el tipo MIME no está soportado', async () => {
       const invalidFile = { ...mockFile, mimetype: 'audio/mp3' };
       await expect(
-        service.createEntrega('exam-1', 'alumno-1', invalidFile),
+        service.createEntrega('exam-1', 'alumno-1', invalidFile, 'prof-1'),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('lanza NotFoundException si el examen o el alumno no existen', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce(null);
 
       await expect(
-        service.createEntrega('exam-inexistente', 'alumno-1', mockFile),
+        service.createEntrega('exam-inexistente', 'alumno-1', mockFile, 'prof-1'),
       ).rejects.toThrow(NotFoundException);
 
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce({
         id: 'exam-1',
+        cursoId: 'c-1',
         estado: 'PUBLICADO',
       });
-      mockPrismaService.alumno.findUnique.mockResolvedValueOnce(null);
+      mockPrismaService.alumno.findFirst.mockResolvedValueOnce(null);
 
       await expect(
-        service.createEntrega('exam-1', 'alumno-inexistente', mockFile),
+        service.createEntrega('exam-1', 'alumno-inexistente', mockFile, 'prof-1'),
       ).rejects.toThrow(NotFoundException);
     });
 
     it('lanza BadRequestException si el examen está en estado BORRADOR o ARCHIVADO', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce({
         id: 'exam-1',
         estado: 'BORRADOR',
       });
 
       await expect(
-        service.createEntrega('exam-1', 'alumno-1', mockFile),
+        service.createEntrega('exam-1', 'alumno-1', mockFile, 'prof-1'),
       ).rejects.toThrow(
         new BadRequestException(
           'No se pueden subir entregas a un examen en estado BORRADOR o ARCHIVADO.',
         ),
       );
 
-      mockPrismaService.examen.findUnique.mockResolvedValueOnce({
+      mockPrismaService.examen.findFirst.mockResolvedValueOnce({
         id: 'exam-1',
         estado: 'ARCHIVADO',
       });
 
       await expect(
-        service.createEntrega('exam-1', 'alumno-1', mockFile),
+        service.createEntrega('exam-1', 'alumno-1', mockFile, 'prof-1'),
       ).rejects.toThrow(
         new BadRequestException(
           'No se pueden subir entregas a un examen en estado BORRADOR o ARCHIVADO.',
@@ -141,11 +145,12 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
     });
 
     it('crea la entrega en estado PENDIENTE y dispara el procesamiento en background', async () => {
-      mockPrismaService.examen.findUnique.mockResolvedValue({
+      mockPrismaService.examen.findFirst.mockResolvedValue({
         id: 'exam-1',
+        cursoId: 'c-1',
         estado: 'PUBLICADO',
       });
-      mockPrismaService.alumno.findUnique.mockResolvedValue({ id: 'alumno-1' });
+      mockPrismaService.alumno.findFirst.mockResolvedValue({ id: 'alumno-1' });
       mockPrismaService.entrega.create.mockResolvedValue({
         id: 'entrega-123',
         examenId: 'exam-1',
@@ -162,6 +167,7 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
         'exam-1',
         'alumno-1',
         mockFile,
+        'prof-1',
       );
 
       expect(result).toBeDefined();
@@ -301,7 +307,7 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
 
   describe('approveEntrega', () => {
     it('aprueba la entrega actualizando notaFinal y cambiando estado a PUBLICADO', async () => {
-      mockPrismaService.entrega.findUnique.mockResolvedValue({
+      mockPrismaService.entrega.findFirst.mockResolvedValue({
         id: 'entrega-123',
         correccion: { id: 'corr-1', feedbackJSON: '{}' },
       });
@@ -315,6 +321,7 @@ describe('EntregasService - Creación, Corrección Asíncrona e Integración con
         'entrega-123',
         9,
         'Excelente',
+        'prof-1',
       );
 
       expect(mockPrismaService.correccion.update).toHaveBeenCalledWith({

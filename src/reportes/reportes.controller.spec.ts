@@ -4,6 +4,7 @@ import request from 'supertest';
 import { ReportesController } from './reportes.controller';
 import { ReportesService } from './reportes.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 describe('ReportesController (HTTP Endpoints)', () => {
   let app: INestApplication;
@@ -60,7 +61,7 @@ describe('ReportesController (HTTP Endpoints)', () => {
 
   const mockPrismaService = {
     examen: {
-      findUnique: jest
+      findFirst: jest
         .fn()
         .mockImplementation(({ where }: { where: { id: string } }) => {
           if (where.id === 'exam-123') return Promise.resolve(mockExamen);
@@ -68,7 +69,7 @@ describe('ReportesController (HTTP Endpoints)', () => {
         }),
     },
     curso: {
-      findUnique: jest
+      findFirst: jest
         .fn()
         .mockImplementation(({ where }: { where: { id: string } }) => {
           if (where.id === 'curso-123') return Promise.resolve(mockCurso);
@@ -84,7 +85,16 @@ describe('ReportesController (HTTP Endpoints)', () => {
         ReportesService,
         { provide: PrismaService, useValue: mockPrismaService },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({
+        canActivate: (context: any) => {
+          const req = context.switchToHttp().getRequest();
+          req.user = { id: 'prof-1' };
+          return true;
+        },
+      })
+      .compile();
 
     app = module.createNestApplication();
     await app.init();

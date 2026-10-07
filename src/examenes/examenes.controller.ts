@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UsePipes,
   ValidationPipe,
+  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ExamenesService } from './examenes.service';
@@ -19,8 +20,11 @@ import { GeneratedExam } from '../ai/ai.service';
 import { RegenerarPreguntaDto } from './dto/regenerar-pregunta.dto';
 import { UpdateExamenDto } from './dto/update-examen.dto';
 import { DuplicarExamenDto } from './dto/duplicar-examen.dto';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   ApiTags,
+  ApiBearerAuth,
   ApiOperation,
   ApiResponse,
   ApiBody,
@@ -28,6 +32,8 @@ import {
 } from '@nestjs/swagger';
 
 @ApiTags('Exámenes')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard)
 @Controller(['api/v1/examenes', 'examenes'])
 export class ExamenesController {
   constructor(private readonly examenesService: ExamenesService) {}
@@ -66,15 +72,25 @@ export class ExamenesController {
     summary: 'Obtiene las métricas y diagnóstico pedagógico de un examen',
   })
   @ApiParam({ name: 'id', description: 'ID del examen' })
-  async getMetricasExamen(@Param('id') id: string) {
-    return this.examenesService.getMetricasExamen(id);
+  @ApiResponse({ status: 200, description: 'Métricas del examen obtenidas exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Examen no encontrado.' })
+  async getMetricasExamen(
+    @Param('id') id: string,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.examenesService.getMetricasExamen(id, profesorId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de un examen' })
   @ApiParam({ name: 'id', description: 'ID del examen' })
-  async getExamen(@Param('id') id: string) {
-    return this.examenesService.getExamen(id);
+  @ApiResponse({ status: 200, description: 'Detalle del examen retornado exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Examen no encontrado.' })
+  async getExamen(
+    @Param('id') id: string,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.examenesService.getExamen(id, profesorId);
   }
 
   /**
@@ -83,12 +99,15 @@ export class ExamenesController {
   @Put(':id')
   @ApiOperation({ summary: 'Editar un examen y sus preguntas' })
   @ApiParam({ name: 'id', description: 'ID del examen' })
+  @ApiResponse({ status: 200, description: 'Examen actualizado exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Examen no encontrado.' })
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async updateExamen(
     @Param('id') id: string,
     @Body() dto: UpdateExamenDto,
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.examenesService.updateExamen(id, dto);
+    return this.examenesService.updateExamen(id, dto, profesorId);
   }
 
   @Patch(':id/estado')
@@ -112,8 +131,9 @@ export class ExamenesController {
   async updateEstado(
     @Param('id') id: string,
     @Body() body: UpdateEstadoExamenDto,
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.examenesService.updateEstado(id, body.estado);
+    return this.examenesService.updateEstado(id, body.estado, profesorId);
   }
 
   /**
@@ -124,8 +144,13 @@ export class ExamenesController {
     summary: 'Eliminar un examen y sus preguntas/entregas en cascada',
   })
   @ApiParam({ name: 'id', description: 'ID del examen' })
-  async deleteExamen(@Param('id') id: string) {
-    return this.examenesService.deleteExamen(id);
+  @ApiResponse({ status: 200, description: 'Examen eliminado exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Examen no encontrado.' })
+  async deleteExamen(
+    @Param('id') id: string,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.examenesService.deleteExamen(id, profesorId);
   }
 
   /**
@@ -134,11 +159,14 @@ export class ExamenesController {
   @Post(':id/duplicar')
   @ApiOperation({ summary: 'Duplicar un examen' })
   @ApiParam({ name: 'id', description: 'ID del examen a duplicar' })
+  @ApiResponse({ status: 201, description: 'Examen duplicado exitosamente.' })
+  @ApiResponse({ status: 404, description: 'Examen o curso de destino no encontrado.' })
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   async duplicarExamen(
     @Param('id') id: string,
     @Body() dto: DuplicarExamenDto,
+    @CurrentUser('id') profesorId: string,
   ) {
-    return this.examenesService.duplicarExamen(id, dto);
+    return this.examenesService.duplicarExamen(id, dto, profesorId);
   }
 }

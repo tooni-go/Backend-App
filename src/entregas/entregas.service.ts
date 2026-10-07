@@ -39,6 +39,7 @@ export class EntregasService {
     examId: string,
     alumnoId: string,
     file: Express.Multer.File,
+    profesorId: string,
   ) {
     // 1. Validaciones previas de entrada y archivo
     if (!examId) {
@@ -78,12 +79,15 @@ export class EntregasService {
       );
     }
 
-    // 4. Verificar que existen el Examen y el Alumno
-    const examen = await this.prisma.examen.findUnique({
-      where: { id: examId },
+    // 4. Verificar que existen el Examen y el Alumno pertenecientes al profesor
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id: examId,
+        curso: { profesorId },
+      },
     });
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${examId} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     if (examen.estado !== 'PUBLICADO') {
@@ -92,11 +96,19 @@ export class EntregasService {
       );
     }
 
-    const alumno = await this.prisma.alumno.findUnique({
-      where: { id: alumnoId },
+    const alumno = await this.prisma.alumno.findFirst({
+      where: {
+        id: alumnoId,
+        cursos: {
+          some: {
+            cursoId: examen.cursoId,
+            curso: { profesorId },
+          },
+        },
+      },
     });
     if (!alumno) {
-      throw new NotFoundException(`Alumno con ID ${alumnoId} no encontrado.`);
+      throw new NotFoundException(`Alumno no encontrado en el curso de este examen.`);
     }
 
     // 5. Generar un nombre único para el archivo y guardarlo en el path resuelto
@@ -139,18 +151,21 @@ export class EntregasService {
   }
 
   /**
-   * Lista entregas con filtros opcionales por examenId y/o alumnoId.
+   * Lista entregas con filtros opcionales por examenId y/o alumnoId restringidas al docente.
    */
-  async getEntregas(filters: { examenId?: string; alumnoId?: string }) {
-    const { examenId, alumnoId } = filters;
+  async getEntregas(filters: {
+    examenId?: string;
+    alumnoId?: string;
+    profesorId: string;
+  }) {
+    const { examenId, alumnoId, profesorId } = filters;
 
-    if (!examenId && !alumnoId) {
-      throw new BadRequestException(
-        'Debe especificar al menos un filtro: examenId o alumnoId.',
-      );
-    }
+    const where: any = {
+      examen: {
+        curso: { profesorId },
+      },
+    };
 
-    const where: { examenId?: string; alumnoId?: string } = {};
     if (examenId) where.examenId = examenId;
     if (alumnoId) where.alumnoId = alumnoId;
 
@@ -264,11 +279,16 @@ export class EntregasService {
   }
 
   /**
-   * Obtiene una entrega con sus detalles y su corrección asociada.
+   * Obtiene una entrega con sus detalles y su corrección asociada, validando pertenencia al docente.
    */
-  async getEntrega(id: string) {
-    const entrega = await this.prisma.entrega.findUnique({
-      where: { id },
+  async getEntrega(id: string, profesorId: string) {
+    const entrega = await this.prisma.entrega.findFirst({
+      where: {
+        id,
+        examen: {
+          curso: { profesorId },
+        },
+      },
       include: {
         alumno: true,
         examen: {
@@ -279,23 +299,33 @@ export class EntregasService {
     });
 
     if (!entrega) {
-      throw new NotFoundException(`Entrega con ID ${id} no encontrada.`);
+      throw new NotFoundException(`Entrega no encontrada.`);
     }
 
     return entrega;
   }
 
   /**
-   * Aprueba la corrección de forma definitiva por parte del profesor.
+   * Aprueba la corrección de forma definitiva por parte del profesor autenticado.
    */
-  async approveEntrega(id: string, notaFinal: number, observaciones?: string) {
-    const entrega = await this.prisma.entrega.findUnique({
-      where: { id },
+  async approveEntrega(
+    id: string,
+    notaFinal: number,
+    observaciones: string | undefined,
+    profesorId: string,
+  ) {
+    const entrega = await this.prisma.entrega.findFirst({
+      where: {
+        id,
+        examen: {
+          curso: { profesorId },
+        },
+      },
       include: { correccion: true },
     });
 
     if (!entrega) {
-      throw new NotFoundException(`Entrega con ID ${id} no encontrada.`);
+      throw new NotFoundException(`Entrega no encontrada.`);
     }
 
     const fechaAprobacion = new Date();

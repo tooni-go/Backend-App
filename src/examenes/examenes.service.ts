@@ -32,11 +32,14 @@ export class ExamenesService {
   }
 
   /**
-   * Obtiene el detalle de un examen por ID con sus preguntas, entregas y el curso con sus alumnos anidados.
+   * Obtiene el detalle de un examen por ID validando pertenencia al profesor autenticado.
    */
-  async getExamen(id: string) {
-    const examen = await this.prisma.examen.findUnique({
-      where: { id },
+  async getExamen(id: string, profesorId: string) {
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id,
+        curso: { profesorId },
+      },
       include: {
         preguntas: true,
         entregas: true,
@@ -53,20 +56,30 @@ export class ExamenesService {
     });
 
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     return examen;
   }
 
-  async updateEstado(id: string, estado: EstadoExamenEnum) {
-    const examen = await this.prisma.examen.findUnique({
-      where: { id },
+  /**
+   * Actualiza el estado del examen verificando titularidad del docente.
+   */
+  async updateEstado(
+    id: string,
+    estado: EstadoExamenEnum,
+    profesorId: string,
+  ) {
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id,
+        curso: { profesorId },
+      },
       include: { preguntas: true },
     });
 
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     // Validar que el examen tenga preguntas antes de pasar a PUBLICADO
@@ -91,16 +104,23 @@ export class ExamenesService {
   }
 
   /**
-   * Actualiza un examen existente y sincroniza su lista de preguntas.
+   * Actualiza un examen existente y sincroniza su lista de preguntas, validando pertenencia al docente.
    */
-  async updateExamen(id: string, dto: UpdateExamenDto) {
-    const examenExistente = await this.prisma.examen.findUnique({
-      where: { id },
+  async updateExamen(
+    id: string,
+    dto: UpdateExamenDto,
+    profesorId: string,
+  ) {
+    const examenExistente = await this.prisma.examen.findFirst({
+      where: {
+        id,
+        curso: { profesorId },
+      },
       include: { preguntas: true },
     });
 
     if (!examenExistente) {
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     let parsedFecha: Date | undefined = undefined;
@@ -167,15 +187,18 @@ export class ExamenesService {
   }
 
   /**
-   * Elimina un examen y todas sus relaciones (correcciones, entregas y preguntas).
+   * Elimina un examen y todas sus relaciones, validando pertenencia al docente.
    */
-  async deleteExamen(id: string) {
-    const examen = await this.prisma.examen.findUnique({
-      where: { id },
+  async deleteExamen(id: string, profesorId: string) {
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id,
+        curso: { profesorId },
+      },
     });
 
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -204,27 +227,34 @@ export class ExamenesService {
   }
 
   /**
-   * Duplica un examen y sus consignas en el curso especificado o en el mismo curso.
+   * Duplica un examen y sus consignas en el curso especificado, validando que ambos pertenezcan al docente.
    */
-  async duplicarExamen(id: string, dto?: DuplicarExamenDto) {
-    const examen = await this.prisma.examen.findUnique({
-      where: { id },
+  async duplicarExamen(
+    id: string,
+    dto: DuplicarExamenDto | undefined,
+    profesorId: string,
+  ) {
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id,
+        curso: { profesorId },
+      },
       include: { preguntas: true },
     });
 
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     const targetCourseId = dto?.cursoDestinoId || examen.cursoId;
 
-    const cursoDestino = await this.prisma.curso.findUnique({
-      where: { id: targetCourseId },
+    const cursoDestino = await this.prisma.curso.findFirst({
+      where: { id: targetCourseId, profesorId },
     });
 
     if (!cursoDestino) {
       throw new NotFoundException(
-        `Curso de destino con ID ${targetCourseId} no encontrado.`,
+        `Curso de destino no encontrado.`,
       );
     }
 
@@ -253,8 +283,8 @@ export class ExamenesService {
   /**
    * Alias de compatibilidad para duplicar examen.
    */
-  async duplicateExamen(id: string, cursoDestinoId?: string) {
-    return this.duplicarExamen(id, { cursoDestinoId });
+  async duplicateExamen(id: string, cursoDestinoId: string | undefined, profesorId: string) {
+    return this.duplicarExamen(id, { cursoDestinoId }, profesorId);
   }
 
   /**
@@ -331,11 +361,14 @@ export class ExamenesService {
   }
 
   /**
-   * Obtiene las métricas y diagnóstico pedagógico de un examen.
+   * Obtiene las métricas y diagnóstico pedagógico de un examen, validando pertenencia al docente.
    */
-  async getMetricasExamen(id: string) {
-    const examen = await this.prisma.examen.findUnique({
-      where: { id },
+  async getMetricasExamen(id: string, profesorId: string) {
+    const examen = await this.prisma.examen.findFirst({
+      where: {
+        id,
+        curso: { profesorId },
+      },
       include: {
         preguntas: true,
         curso: {
@@ -352,7 +385,7 @@ export class ExamenesService {
     });
 
     if (!examen) {
-      throw new NotFoundException(`Examen con ID ${id} no encontrado.`);
+      throw new NotFoundException(`Examen no encontrado.`);
     }
 
     const round1 = (num: number) => Math.round(num * 10) / 10;

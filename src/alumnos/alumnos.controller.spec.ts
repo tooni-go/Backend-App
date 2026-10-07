@@ -49,14 +49,14 @@ describe('AlumnosController', () => {
   });
 
   it('should list alumnos with pagination and filter', async () => {
-    const res = await controller.getAlumnos('curso-1', '1', '10');
-    expect(service.getAlumnos).toHaveBeenCalledWith('curso-1', 1, 10);
+    const res = await controller.getAlumnos('prof-1', 'curso-1', '1', '10');
+    expect(service.getAlumnos).toHaveBeenCalledWith('prof-1', 'curso-1', 1, 10);
     expect(res.data).toHaveLength(1);
   });
 
   it('should get one alumno by id', async () => {
-    const res = await controller.getAlumno('1');
-    expect(service.getAlumno).toHaveBeenCalledWith('1');
+    const res = await controller.getAlumno('1', 'prof-1');
+    expect(service.getAlumno).toHaveBeenCalledWith('1', 'prof-1');
     expect(res.id).toBe('1');
   });
 
@@ -66,21 +66,21 @@ describe('AlumnosController', () => {
       legajo: '38123456',
       cursoId: 'curso-1',
     };
-    const res = await controller.createAlumno(dto);
-    expect(service.createAlumno).toHaveBeenCalledWith(dto);
+    const res = await controller.createAlumno(dto, 'prof-1');
+    expect(service.createAlumno).toHaveBeenCalledWith(dto, 'prof-1');
     expect(res.nombre).toBe('Juan Perez');
   });
 
   it('should update an alumno', async () => {
     const dto = { nombre: 'Juan Modificado' };
-    const res = await controller.updateAlumno('1', dto);
-    expect(service.updateAlumno).toHaveBeenCalledWith('1', dto);
+    const res = await controller.updateAlumno('1', dto, 'prof-1');
+    expect(service.updateAlumno).toHaveBeenCalledWith('1', dto, 'prof-1');
     expect(res.nombre).toBe('Juan Modificado');
   });
 
   it('should delete an alumno', async () => {
-    const res = await controller.deleteAlumno('1');
-    expect(service.deleteAlumno).toHaveBeenCalledWith('1');
+    const res = await controller.deleteAlumno('1', 'prof-1');
+    expect(service.deleteAlumno).toHaveBeenCalledWith('1', 'prof-1');
     expect(res.success).toBe(true);
   });
 });
