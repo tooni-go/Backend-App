@@ -13,17 +13,63 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: string; email: string }) {
-    const profesor = await this.prisma.profesor.findUnique({
-      where: { id: payload.sub },
-    });
+  async validate(payload: any) {
+    if (!payload) {
+      throw new UnauthorizedException('Payload del token inválido.');
+    }
+
+    const sub = payload.sub || payload.id;
+    const email = payload.email;
+
+    // 1. Buscar por id (UUID de EvalIA)
+    let profesor = sub
+      ? await this.prisma.profesor.findUnique({ where: { id: sub } })
+      : null;
+
+    // 2. Buscar por googleId
+    if (!profesor && sub) {
+      profesor = await this.prisma.profesor.findUnique({
+        where: { googleId: sub },
+      });
+    }
+
+    // 3. Buscar por email
+    if (!profesor && email) {
+      profesor = await this.prisma.profesor.findUnique({
+        where: { email },
+      });
+    }
+
+    // 4. Si el profesor no existe en la BD pero el token es válido, crearlo automáticamente
+    if (!profesor && (sub || email)) {
+      const googleId = sub || `google-${Date.now()}`;
+      const teacherEmail = email || `${googleId}@evalia.com`;
+      const nombre =
+        payload.nombre || payload.given_name || payload.name || 'Docente';
+      const apellido =
+        payload.apellido || payload.family_name || 'EvalIA';
+
+      profesor = await this.prisma.profesor.upsert({
+        where: { email: teacherEmail },
+        update: {
+          nombre,
+          apellido,
+        },
+        create: {
+          googleId,
+          email: teacherEmail,
+          nombre,
+          apellido,
+        },
+      });
+    }
 
     if (!profesor) {
       throw new UnauthorizedException(
-        'El profesor asociado a este token ya no existe.',
+        'No se pudo resolver el profesor para la sesión actual.',
       );
     }
 
-    return profesor; // Se inyecta automáticamente en req.user
+    return profesor; // Inyectado en req.user con el id real de la BD garantizado
   }
 }
