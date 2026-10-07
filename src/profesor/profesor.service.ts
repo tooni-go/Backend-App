@@ -69,7 +69,6 @@ export class ProfesorService {
     if (dto.nombre !== undefined) dataToUpdate.nombre = dto.nombre;
     if (dto.apellido !== undefined) dataToUpdate.apellido = dto.apellido;
     if (dto.email !== undefined) dataToUpdate.email = dto.email;
-
     return this.prisma.profesor.update({
       where: { id: targetId },
       data: dataToUpdate,
