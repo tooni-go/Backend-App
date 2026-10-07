@@ -10,14 +10,21 @@ import {
   IsString,
   IsArray,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class CreateCursoDto {
   @IsString()
   @IsNotEmpty()
   materia: string;
 
-  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value.replace(/\D/g, ''), 10);
+      return isNaN(parsed) ? value : parsed;
+    }
+    return value;
+  })
   @IsNumber()
   @IsNotEmpty()
   anio: number;
@@ -26,7 +33,14 @@ export class CreateCursoDto {
   @IsNotEmpty()
   division: string;
 
-  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value.replace(/\D/g, ''), 10);
+      return isNaN(parsed) ? value : parsed;
+    }
+    return value;
+  })
   @IsNumber()
   @IsNotEmpty()
   anioLectivo: number;
@@ -42,7 +56,14 @@ export class UpdateCursoDto {
   materia?: string;
 
   @IsOptional()
-  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value.replace(/\D/g, ''), 10);
+      return isNaN(parsed) ? value : parsed;
+    }
+    return value;
+  })
   @IsNumber()
   anio?: number;
 
@@ -51,7 +72,14 @@ export class UpdateCursoDto {
   division?: string;
 
   @IsOptional()
-  @Type(() => Number)
+  @Transform(({ value }) => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') {
+      const parsed = parseInt(value.replace(/\D/g, ''), 10);
+      return isNaN(parsed) ? value : parsed;
+    }
+    return value;
+  })
   @IsNumber()
   anioLectivo?: number;
 
