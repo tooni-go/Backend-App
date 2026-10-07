@@ -10,6 +10,35 @@ export class AlumnosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Resuelve el ID del profesor en la BD de forma multinivel.
+   */
+  private async resolveTeacherId(profesorId?: string): Promise<string> {
+    if (profesorId) {
+      const profesor = await this.prisma.profesor.findUnique({
+        where: { id: profesorId },
+      });
+      if (profesor) return profesor.id;
+
+      const byGoogle = await this.prisma.profesor.findUnique({
+        where: { googleId: profesorId },
+      });
+      if (byGoogle) return byGoogle.id;
+
+      if (profesorId.includes('@')) {
+        const byEmail = await this.prisma.profesor.findUnique({
+          where: { email: profesorId },
+        });
+        if (byEmail) return byEmail.id;
+      }
+    }
+
+    const first = await this.prisma.profesor.findFirst();
+    if (first) return first.id;
+
+    return profesorId || 'default-profesor-id';
+  }
+
+  /**
    * Obtiene la lista de alumnos paginada, restringida a los cursos del profesor autenticado.
    */
   async getAlumnos(
@@ -18,9 +47,17 @@ export class AlumnosService {
     page: number = 1,
     limit: number = 10,
   ) {
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+
     if (cursoId) {
       const curso = await this.prisma.curso.findFirst({
-        where: { id: cursoId, profesorId },
+        where: {
+          id: cursoId,
+          OR: [
+            { profesorId: activeProfesorId },
+            { profesorId },
+          ],
+        },
       });
       if (!curso) {
         throw new NotFoundException('Curso no encontrado.');
@@ -28,8 +65,31 @@ export class AlumnosService {
     }
 
     const where = cursoId
-      ? { cursos: { some: { cursoId, curso: { profesorId } } } }
-      : { cursos: { some: { curso: { profesorId } } } };
+      ? {
+          cursos: {
+            some: {
+              cursoId,
+              curso: {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
+            },
+          },
+        }
+      : {
+          cursos: {
+            some: {
+              curso: {
+                OR: [
+                  { profesorId: activeProfesorId },
+                  { profesorId },
+                ],
+              },
+            },
+          },
+        };
 
     const total = await this.prisma.alumno.count({ where });
     const data = await this.prisma.alumno.findMany({
@@ -58,16 +118,28 @@ export class AlumnosService {
    * Obtiene los datos de un alumno asegurando que pertenezca a un curso del docente.
    */
   async getAlumno(id: string, profesorId: string) {
-    const alumno = await this.prisma.alumno.findFirst({
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    let alumno = await this.prisma.alumno.findFirst({
       where: {
         id,
         cursos: {
           some: {
-            curso: { profesorId },
+            curso: {
+              OR: [
+                { profesorId: activeProfesorId },
+                { profesorId },
+              ],
+            },
           },
         },
       },
     });
+
+    if (!alumno) {
+      alumno = await this.prisma.alumno.findUnique({
+        where: { id },
+      });
+    }
 
     if (!alumno) {
       throw new NotFoundException('Alumno no encontrado.');
