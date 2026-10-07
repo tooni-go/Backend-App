@@ -10,12 +10,14 @@ import {
   IsString,
   IsArray,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateCursoDto {
   @IsString()
   @IsNotEmpty()
   materia: string;
 
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   anio: number;
@@ -24,9 +26,14 @@ export class CreateCursoDto {
   @IsNotEmpty()
   division: string;
 
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   anioLectivo: number;
+
+  @IsOptional()
+  @IsString()
+  preferenciasMembrete?: string;
 }
 
 export class UpdateCursoDto {
@@ -35,6 +42,7 @@ export class UpdateCursoDto {
   materia?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   anio?: number;
 
@@ -43,8 +51,13 @@ export class UpdateCursoDto {
   division?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   anioLectivo?: number;
+
+  @IsOptional()
+  @IsString()
+  preferenciasMembrete?: string;
 }
 
 export class RegisterAlumnoDto {
@@ -95,6 +108,7 @@ export class CursosService {
         anio: dto.anio,
         division: dto.division,
         anioLectivo: dto.anioLectivo,
+        preferenciasMembrete: dto.preferenciasMembrete || null,
         profesorId,
       },
     });
@@ -146,6 +160,9 @@ export class CursosService {
         ...(dto.anio && { anio: dto.anio }),
         ...(dto.division && { division: dto.division }),
         ...(dto.anioLectivo && { anioLectivo: dto.anioLectivo }),
+        ...(dto.preferenciasMembrete !== undefined && {
+          preferenciasMembrete: dto.preferenciasMembrete,
+        }),
       },
     });
   }

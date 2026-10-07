@@ -14,6 +14,10 @@ export class UpdateProfesorDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  @IsOptional()
+  @IsString()
+  departamento?: string;
 }
 
 @Injectable()
@@ -61,9 +65,13 @@ export class ProfesorService {
       targetId = defaultProf.id;
     }
 
+    const dataToUpdate: { nombre?: string; apellido?: string; email?: string } = {};
+    if (dto.nombre !== undefined) dataToUpdate.nombre = dto.nombre;
+    if (dto.apellido !== undefined) dataToUpdate.apellido = dto.apellido;
+    if (dto.email !== undefined) dataToUpdate.email = dto.email;
     return this.prisma.profesor.update({
       where: { id: targetId },
-      data: dto,
+      data: dataToUpdate,
     });
   }
 }
