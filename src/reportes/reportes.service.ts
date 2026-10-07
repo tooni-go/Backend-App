@@ -186,11 +186,6 @@ export class ReportesService {
       }
     }
 
-    if (this.prisma?.profesor?.findFirst) {
-      const first = await this.prisma.profesor.findFirst();
-      if (first) return first.id;
-    }
-
     return profesorId || 'default-profesor-id';
   }
 

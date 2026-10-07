@@ -32,11 +32,6 @@ export class AlumnosService {
       }
     }
 
-    if (this.prisma?.profesor?.findFirst) {
-      const first = await this.prisma.profesor.findFirst();
-      if (first) return first.id;
-    }
-
     return profesorId || 'default-profesor-id';
   }
 
@@ -128,7 +123,7 @@ export class AlumnosService {
             ],
           };
 
-    let alumno = await this.prisma.alumno.findFirst({
+    const alumno = await this.prisma.alumno.findFirst({
       where: {
         id,
         cursos: {
@@ -138,12 +133,6 @@ export class AlumnosService {
         },
       },
     });
-
-    if (!alumno && this.prisma?.alumno?.findUnique) {
-      alumno = await this.prisma.alumno.findUnique({
-        where: { id },
-      });
-    }
 
     if (!alumno) {
       throw new NotFoundException('Alumno no encontrado.');

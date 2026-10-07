@@ -147,23 +147,29 @@ export class CursosService {
         });
         if (byEmail) return byEmail.id;
       }
-    }
 
-    if (this.prisma?.profesor?.findFirst) {
-      const first = await this.prisma.profesor.findFirst();
-      if (first) return first.id;
-    }
-
-    if (this.prisma?.profesor?.create) {
-      const created = await this.prisma.profesor.create({
-        data: {
-          nombre: 'Docente',
-          apellido: 'EvalIA',
-          email: 'docente@evalia.com',
-          googleId: profesorId || `google-${Date.now()}`,
-        },
-      });
-      return created.id;
+      if (this.prisma?.profesor?.create) {
+        try {
+          const isEmail = profesorId.includes('@');
+          const email = isEmail ? profesorId : `${profesorId}@evalia.com`;
+          const created = await this.prisma.profesor.create({
+            data: {
+              nombre: 'Docente',
+              apellido: 'EvalIA',
+              email,
+              googleId: isEmail ? `google-${profesorId}` : profesorId,
+            },
+          });
+          return created.id;
+        } catch {
+          if (profesorId.includes('@')) {
+            const existing = await this.prisma.profesor.findUnique({
+              where: { email: profesorId },
+            });
+            if (existing) return existing.id;
+          }
+        }
+      }
     }
 
     return profesorId || 'default-profesor-id';
@@ -194,10 +200,9 @@ export class CursosService {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
     const cursos = await this.prisma.curso.findMany({
       where: {
-        OR: [
-          { profesorId: activeProfesorId },
-          { profesorId },
-        ],
+        ...(activeProfesorId === profesorId
+          ? { profesorId }
+          : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
       },
       include: {
         examenes: true,
@@ -228,7 +233,7 @@ export class CursosService {
    */
   async updateCurso(id: string, dto: UpdateCursoDto, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let curso = await this.prisma.curso.findFirst({
+    const curso = await this.prisma.curso.findFirst({
       where: {
         id,
         ...(activeProfesorId === profesorId
@@ -236,9 +241,6 @@ export class CursosService {
           : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
       },
     });
-    if (!curso && this.prisma?.curso?.findUnique) {
-      curso = await this.prisma.curso.findUnique({ where: { id } });
-    }
     if (!curso) throw new NotFoundException('Curso no encontrado.');
 
     return this.prisma.curso.update({
@@ -260,7 +262,7 @@ export class CursosService {
    */
   async deleteCurso(id: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let curso = await this.prisma.curso.findFirst({
+    const curso = await this.prisma.curso.findFirst({
       where: {
         id,
         ...(activeProfesorId === profesorId
@@ -268,9 +270,6 @@ export class CursosService {
           : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
       },
     });
-    if (!curso && this.prisma?.curso?.findUnique) {
-      curso = await this.prisma.curso.findUnique({ where: { id } });
-    }
     if (!curso) throw new NotFoundException('Curso no encontrado.');
 
     await this.prisma.curso.delete({ where: { id } });
@@ -282,7 +281,7 @@ export class CursosService {
    */
   async getCurso(cursoId: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let curso = await this.prisma.curso.findFirst({
+    const curso = await this.prisma.curso.findFirst({
       where: {
         id: cursoId,
         ...(activeProfesorId === profesorId
@@ -302,24 +301,6 @@ export class CursosService {
         },
       },
     });
-
-    if (!curso && this.prisma?.curso?.findUnique) {
-      curso = await this.prisma.curso.findUnique({
-        where: { id: cursoId },
-        include: {
-          examenes: {
-            include: {
-              preguntas: true,
-              _count: { select: { entregas: true } },
-            },
-            orderBy: { fecha: 'desc' },
-          },
-          alumnos: {
-            include: { alumno: true },
-          },
-        },
-      });
-    }
 
     if (!curso) {
       throw new NotFoundException(`Curso no encontrado.`);

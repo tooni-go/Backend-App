@@ -40,11 +40,6 @@ export class ExamenesService {
       }
     }
 
-    if (this.prisma?.profesor?.findFirst) {
-      const first = await this.prisma.profesor.findFirst();
-      if (first) return first.id;
-    }
-
     return profesorId || 'default-profesor-id';
   }
 
@@ -100,30 +95,6 @@ export class ExamenesService {
       },
     });
 
-    if (!examen && this.prisma?.examen?.findUnique) {
-      examen = await this.prisma.examen.findUnique({
-        where: { id },
-        include: {
-          preguntas: true,
-          entregas: {
-            include: {
-              alumno: true,
-              correccion: true,
-            },
-          },
-          curso: {
-            include: {
-              alumnos: {
-                include: {
-                  alumno: true,
-                },
-              },
-            },
-          },
-        },
-      });
-    }
-
     if (!examen) {
       throw new NotFoundException(`Examen no encontrado.`);
     }
@@ -140,7 +111,7 @@ export class ExamenesService {
     profesorId: string,
   ) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let examen = await this.prisma.examen.findFirst({
+    const examen = await this.prisma.examen.findFirst({
       where: {
         id,
         curso:
@@ -155,13 +126,6 @@ export class ExamenesService {
       },
       include: { preguntas: true },
     });
-
-    if (!examen && this.prisma?.examen?.findUnique) {
-      examen = await this.prisma.examen.findUnique({
-        where: { id },
-        include: { preguntas: true },
-      });
-    }
 
     if (!examen) {
       throw new NotFoundException(`Examen no encontrado.`);
@@ -197,7 +161,7 @@ export class ExamenesService {
     profesorId: string,
   ) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let examenExistente = await this.prisma.examen.findFirst({
+    const examenExistente = await this.prisma.examen.findFirst({
       where: {
         id,
         curso:
@@ -212,13 +176,6 @@ export class ExamenesService {
       },
       include: { preguntas: true },
     });
-
-    if (!examenExistente && this.prisma?.examen?.findUnique) {
-      examenExistente = await this.prisma.examen.findUnique({
-        where: { id },
-        include: { preguntas: true },
-      });
-    }
 
     if (!examenExistente) {
       throw new NotFoundException(`Examen no encontrado.`);
@@ -292,7 +249,7 @@ export class ExamenesService {
    */
   async deleteExamen(id: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let examen = await this.prisma.examen.findFirst({
+    const examen = await this.prisma.examen.findFirst({
       where: {
         id,
         curso:
@@ -306,10 +263,6 @@ export class ExamenesService {
               },
       },
     });
-
-    if (!examen && this.prisma?.examen?.findUnique) {
-      examen = await this.prisma.examen.findUnique({ where: { id } });
-    }
 
     if (!examen) {
       throw new NotFoundException(`Examen no encontrado.`);
@@ -349,7 +302,7 @@ export class ExamenesService {
     profesorId: string,
   ) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
-    let examen = await this.prisma.examen.findFirst({
+    const examen = await this.prisma.examen.findFirst({
       where: {
         id,
         curso:
@@ -365,20 +318,13 @@ export class ExamenesService {
       include: { preguntas: true },
     });
 
-    if (!examen && this.prisma?.examen?.findUnique) {
-      examen = await this.prisma.examen.findUnique({
-        where: { id },
-        include: { preguntas: true },
-      });
-    }
-
     if (!examen) {
       throw new NotFoundException(`Examen no encontrado.`);
     }
 
     const targetCourseId = dto?.cursoDestinoId || examen.cursoId;
 
-    let cursoDestino = await this.prisma.curso.findFirst({
+    const cursoDestino = await this.prisma.curso.findFirst({
       where: {
         id: targetCourseId,
         ...(activeProfesorId === profesorId
@@ -387,10 +333,8 @@ export class ExamenesService {
       },
     });
 
-    if (!cursoDestino && this.prisma?.curso?.findUnique) {
-      cursoDestino = await this.prisma.curso.findUnique({
-        where: { id: targetCourseId },
-      });
+    if (!cursoDestino) {
+      throw new NotFoundException('Curso destino no encontrado.');
     }
 
     if (!cursoDestino) {
