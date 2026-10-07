@@ -130,6 +130,15 @@ export class CursosService {
    * Crea un nuevo curso asociado al profesor autenticado.
    */
   async createCurso(dto: CreateCursoDto, profesorId: string) {
+    const profesor = await this.prisma.profesor.findUnique({
+      where: { id: profesorId },
+    });
+    if (!profesor) {
+      throw new NotFoundException(
+        'El profesor autenticado no existe en la base de datos. Por favor, vuelva a iniciar sesión.',
+      );
+    }
+
     return this.prisma.curso.create({
       data: {
         materia: dto.materia,
