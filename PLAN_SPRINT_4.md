@@ -1,7 +1,7 @@
 # 📅 Plan de Sprint Cierre - Estabilización, Seguridad Crítica y Pulido Final
 
-*   **Fecha de Inicio:** 1 de Octubre de 2026 (1/10/26)
-*   **Fecha de Finalización:** 7 de Octubre de 2026 (7/10/26) — **Duración: 1 semana**
+*   **Fecha de Inicio:** 29 de Septiembre de 2026 (29/09/26)
+*   **Fecha de Finalización:** 10 de Octubre de 2026 (10/10/26) — **Duración: 2 semanas (10 días hábiles)**
 *   **Capacidad del Equipo:** 3 desarrolladores × 4 horas/día (máx) = **60 horas de capacidad real planificada** (máximo **20 horas por desarrollador**).
 *   **Capacidad Planificada Efectiva:** Se planifica un total de **50 horas de desarrollo efectivo** (~16-17 horas por desarrollador) garantizando un reparto equitativo de carga y margen de seguridad amplio para pruebas de regresión y cierre.
 *   **Enfoque de Desarrollo:** Corregir **todos los bugs críticos detectados en la demo del 27/09/2026**, implementar las mejoras de seguridad y UX más urgentes, y dejar la plataforma en condiciones de entrega final. Las tareas se distribuyen en tres ejes:
@@ -158,7 +158,7 @@ Al finalizar el Sprint Cierre, la plataforma deberá cumplir los siguientes crit
 
 ---
 
-## 🚀 Stretch Goals (Opcionales si el equipo finaliza antes del 15/10/26)
+## 🚀 Stretch Goals (Opcionales si el equipo finaliza antes del 10/10/26)
 
 Si el equipo completa todas las tareas obligatorias antes de la fecha de cierre:
 

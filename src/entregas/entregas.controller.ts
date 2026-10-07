@@ -174,4 +174,29 @@ export class EntregasController {
       profesorId,
     );
   }
+
+  /**
+   * Reintenta la corrección por IA de una entrega en estado REQUIERE_REVISION.
+   */
+  @Post(':id/reintentar-correccion')
+  @ApiOperation({
+    summary:
+      'Reintentar la corrección por IA de una entrega en estado REQUIERE_REVISION',
+  })
+  @ApiParam({ name: 'id', description: 'ID de la entrega a reintentar' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Corrección iniciada en background. Estado actualizado a PROCESANDO.',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'La entrega no está en estado REQUIERE_REVISION o falta el archivo.',
+  })
+  @ApiResponse({ status: 404, description: 'Entrega no encontrada.' })
+  async reintentarCorreccion(@Param('id') id: string) {
+    return this.entregasService.reintentarCorreccion(id);
+  }
 }
+

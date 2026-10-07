@@ -26,6 +26,15 @@ export class ProfesorController {
     return this.profesorService.getProfile(profesorId);
   }
 
+  @Get('profile')
+  @ApiOperation({ summary: 'Obtener perfil del profesor autenticado (alias)' })
+  @ApiResponse({ status: 200, description: 'Perfil obtenido exitosamente.' })
+  @ApiResponse({ status: 401, description: 'No autorizado.' })
+  @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
+  async getProfile(@CurrentUser('id') profesorId: string) {
+    return this.profesorService.getProfile(profesorId);
+  }
+
   @Put('me')
   @ApiOperation({ summary: 'Actualizar perfil del profesor autenticado' })
   @ApiBody({
@@ -42,6 +51,18 @@ export class ProfesorController {
   @ApiResponse({ status: 401, description: 'No autorizado.' })
   @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
   async updateMe(
+    @Body() body: UpdateProfesorDto,
+    @CurrentUser('id') profesorId: string,
+  ) {
+    return this.profesorService.updateProfile(body, profesorId);
+  }
+
+  @Put('profile')
+  @ApiOperation({ summary: 'Actualizar perfil del profesor autenticado (alias)' })
+  @ApiResponse({ status: 200, description: 'Perfil actualizado exitosamente.' })
+  @ApiResponse({ status: 401, description: 'No autorizado.' })
+  @ApiResponse({ status: 404, description: 'Profesor no encontrado.' })
+  async updateProfile(
     @Body() body: UpdateProfesorDto,
     @CurrentUser('id') profesorId: string,
   ) {

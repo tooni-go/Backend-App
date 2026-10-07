@@ -39,13 +39,26 @@ export interface AiMetricsResponse {
   ultimaActualizacion: string;
 }
 
+export interface RetryOptions {
+  maxRetries?: number;
+  delaysMs?: number[];
+  operationLabel?: string;
+  context?: string;
+  sleepFn?: (ms: number) => Promise<void>;
+}
+
 export interface CallWithFallbackOptions<T> {
   context: string;
   geminiCall: () => Promise<T>;
   openRouterCall: () => Promise<T>;
   timeoutMs?: number;
   openRouterModel?: string;
+  retryOptions?: Partial<RetryOptions>;
 }
+
+export const DEFAULT_AI_TIMEOUT_MS = 35000;
+export const DEFAULT_MAX_RETRIES = 2;
+export const DEFAULT_RETRY_DELAYS_MS = [1500, 3000];
 
 @Injectable()
 export class AiResilienceService {
@@ -58,7 +71,7 @@ export class AiResilienceService {
   private lastUpdated: Date = new Date();
 
   /**
-   * Obtiene el timeout configurado en milisegundos (por defecto 30 segundos).
+   * Obtiene el timeout configurado en milisegundos (por defecto 35 segundos, en rango seguro 30s–45s).
    */
   getTimeoutMs(): number {
     const envVal = process.env.AI_TIMEOUT_MS;
@@ -68,7 +81,121 @@ export class AiResilienceService {
         return parsed;
       }
     }
-    return 30000;
+    return DEFAULT_AI_TIMEOUT_MS;
+  }
+
+  /**
+   * Determina si un error capturado es de naturaleza transitoria (429, 503, errores de red/sobrecarga)
+   * y por ende es candidato válido para aplicar política de reintentos con exponential backoff.
+   */
+  isTransientError(error: unknown): boolean {
+    if (!error) {
+      return false;
+    }
+
+    const classified = this.classifyAiError(error);
+
+    // Errores definitivamente no transitorios: no se deben reintentar
+    if (
+      classified.tipo === 'AUTHENTICATION_ERROR' ||
+      classified.tipo === 'VALIDATION_ERROR' ||
+      classified.tipo === 'BAD_REQUEST'
+    ) {
+      return false;
+    }
+
+    if (
+      classified.tipo === 'RATE_LIMIT' ||
+      classified.tipo === 'QUOTA_EXCEEDED'
+    ) {
+      return true;
+    }
+
+    if (classified.statusCode === 429 || classified.statusCode === 503) {
+      return true;
+    }
+
+    const status =
+      (error as any)?.status ||
+      (error as any)?.statusCode ||
+      (error as any)?.response?.status;
+
+    if (status === 429 || status === 503 || status === 502 || status === 504) {
+      return true;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    if (
+      /\b(429|503|502|504)\b/.test(message) ||
+      /rate limit/i.test(message) ||
+      /too many requests/i.test(message) ||
+      /service unavailable/i.test(message) ||
+      /overloaded/i.test(message) ||
+      /high demand/i.test(message) ||
+      /temporarily unavailable/i.test(message) ||
+      /quota/i.test(message) ||
+      /resource_exhausted/i.test(message) ||
+      /ECONNRESET/i.test(message) ||
+      /ETIMEDOUT/i.test(message) ||
+      /ENOTFOUND/i.test(message) ||
+      /network error/i.test(message) ||
+      /fetch failed/i.test(message) ||
+      /socket hang up/i.test(message)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Helper para pausas asíncronas (espera de backoff).
+   * Permite ser espiado o sobreescrito en pruebas unitarias.
+   */
+  async sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Ejecuta una operación asíncrona aplicando política de reintentos con exponential backoff
+   * únicamente ante fallos transitorios (429, 503, red).
+   * Parámetros por defecto: 2 reintentos (3 intentos totales) con esperas de 1.5s (1500ms) y 3.0s (3000ms).
+   */
+  async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    options?: RetryOptions,
+  ): Promise<T> {
+    const maxRetries = options?.maxRetries ?? DEFAULT_MAX_RETRIES;
+    const delaysMs = options?.delaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+    const operationLabel = options?.operationLabel ?? 'Operación IA';
+    const context = options?.context ?? 'ai';
+    const sleepFn = options?.sleepFn ?? ((ms: number) => this.sleep(ms));
+
+    let attempt = 0;
+    while (true) {
+      try {
+        return await operation();
+      } catch (error: unknown) {
+        attempt++;
+        const isTransient = this.isTransientError(error);
+
+        if (!isTransient || attempt > maxRetries) {
+          throw error;
+        }
+
+        const delayMs =
+          delaysMs[attempt - 1] ??
+          delaysMs[delaysMs.length - 1] ??
+          1500 * Math.pow(2, attempt - 1);
+        const classified = this.classifyAiError(error);
+
+        this.logger.warn(
+          `[${context}] Reintento ${attempt}/${maxRetries} para ${operationLabel} tras espera de ${delayMs}ms debido a error transitorio [${classified.tipo}]: ${classified.mensaje}`,
+        );
+
+        await sleepFn(delayMs);
+      }
+    }
   }
 
   /**
@@ -145,10 +272,17 @@ export class AiResilienceService {
       /gateway timeout/i.test(message) ||
       /internal server error/i.test(message)
     ) {
+      let resolvedStatus = typeof status === 'number' ? status : 500;
+      if (typeof status !== 'number') {
+        const match = message.match(/\b(500|502|503|504)\b/);
+        if (match) {
+          resolvedStatus = parseInt(match[1], 10);
+        }
+      }
       return {
         tipo: 'SERVER_ERROR',
         mensaje: message,
-        statusCode: typeof status === 'number' ? status : 500,
+        statusCode: resolvedStatus,
         originalError: error,
       };
     }
@@ -281,22 +415,26 @@ export class AiResilienceService {
   }
 
   /**
-   * Ejecuta una llamada hacia Gemini con fallback automático hacia OpenRouter.
-   * Maneja clasificación de errores, timeouts unificados, logging estructurado y métricas.
+   * Ejecuta una llamada hacia Gemini con reintentos exponenciales y fallback automático hacia OpenRouter.
+   * Maneja reintentos ante errores 429/503/red (1.5s y 3.0s), clasificación de errores, timeouts unificados, logging estructurado y métricas.
    */
   async callWithFallback<T>(params: CallWithFallbackOptions<T>): Promise<T> {
     const { context, geminiCall, openRouterCall } = params;
     const timeoutMs = params.timeoutMs || this.getTimeoutMs();
 
-    // 1. Intentar proveedor principal: Gemini API
+    // 1. Intentar proveedor principal: Gemini API (con reintentos)
     try {
       this.logger.log(
         `[${context}] Iniciando llamada a Gemini API (proveedor principal)...`,
       );
-      const result = await this.executeWithTimeout(
-        geminiCall,
-        timeoutMs,
-        'Gemini API',
+      const result = await this.executeWithRetry(
+        () =>
+          this.executeWithTimeout(geminiCall, timeoutMs, 'Gemini API'),
+        {
+          context,
+          operationLabel: 'Gemini API',
+          ...params.retryOptions,
+        },
       );
       this.geminiSuccesses++;
       this.lastUpdated = new Date();
@@ -322,13 +460,21 @@ export class AiResilienceService {
         modeloOpenRouter: params.openRouterModel,
       });
 
-      // 2. Fallback a proveedor secundario: OpenRouter API
+      // 2. Fallback a proveedor secundario: OpenRouter API (con reintentos)
       try {
         this.logger.log(`[${context}] Ejecutando fallback con OpenRouter...`);
-        const openRouterResult = await this.executeWithTimeout(
-          openRouterCall,
-          timeoutMs,
-          'OpenRouter API',
+        const openRouterResult = await this.executeWithRetry(
+          () =>
+            this.executeWithTimeout(
+              openRouterCall,
+              timeoutMs,
+              'OpenRouter API',
+            ),
+          {
+            context,
+            operationLabel: 'OpenRouter API',
+            ...params.retryOptions,
+          },
         );
         this.openRouterSuccesses++;
         this.lastUpdated = new Date();
