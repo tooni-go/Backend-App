@@ -174,7 +174,7 @@ export class ExamenesService {
                 ],
               },
       },
-      include: { preguntas: true },
+      include: { preguntas: true, curso: true },
     });
 
     if (!examenExistente) {
@@ -199,6 +199,12 @@ export class ExamenesService {
         if (!isNaN(d.getTime())) {
           parsedFecha = d;
         }
+      }
+    }
+
+    if (parsedFecha && examenExistente.curso?.anioLectivo) {
+      if (parsedFecha.getFullYear() < examenExistente.curso.anioLectivo) {
+        throw new BadRequestException(`No se puede registrar un examen con fecha anterior al año lectivo del curso (${examenExistente.curso.anioLectivo})`);
       }
     }
 

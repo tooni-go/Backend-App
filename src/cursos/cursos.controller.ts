@@ -40,7 +40,7 @@ export class CursosController {
       type: 'object',
       required: ['materia', 'anio', 'division', 'anioLectivo'],
       properties: {
-        materia: { type: 'string', example: 'Matemática' },
+        materia: { type: 'string', example: 'MatemÃ¡tica' },
         anio: { type: 'number', example: 5 },
         division: { type: 'string', example: 'A' },
         anioLectivo: { type: 'number', example: 2026 },
@@ -65,7 +65,7 @@ export class CursosController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Lista de cursos retornada con éxito.',
+    description: 'Lista de cursos retornada con Ã©xito.',
   })
   @ApiResponse({ status: 401, description: 'No autorizado.' })
   async getCursos(@CurrentUser('id') profesorId: string) {
@@ -79,7 +79,7 @@ export class CursosController {
     schema: {
       type: 'object',
       properties: {
-        materia: { type: 'string', example: 'Matemática Avanzada' },
+        materia: { type: 'string', example: 'MatemÃ¡tica Avanzada' },
         anio: { type: 'number', example: 6 },
         division: { type: 'string', example: 'B' },
         anioLectivo: { type: 'number', example: 2027 },
@@ -111,7 +111,7 @@ export class CursosController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de un curso' })
   @ApiParam({ name: 'id', description: 'ID del curso' })
-  @ApiResponse({ status: 200, description: 'Detalle del curso retornado con éxito.' })
+  @ApiResponse({ status: 200, description: 'Detalle del curso retornado con Ã©xito.' })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
   async getCurso(
     @Param('id') id: string,
@@ -129,7 +129,7 @@ export class CursosController {
       required: ['nombre', 'apellido', 'legajo'],
       properties: {
         nombre: { type: 'string', example: 'Juan' },
-        apellido: { type: 'string', example: 'Pérez' },
+        apellido: { type: 'string', example: 'PÃ©rez' },
         legajo: { type: 'string', example: 'L-12345' },
       },
     },
@@ -155,7 +155,7 @@ export class CursosController {
       type: 'object',
       required: ['titulo', 'puntajeTotal', 'preguntas'],
       properties: {
-        titulo: { type: 'string', example: 'Examen de Álgebra' },
+        titulo: { type: 'string', example: 'Examen de Ãlgebra' },
         puntajeTotal: { type: 'number', example: 10 },
         preguntas: {
           type: 'array',
@@ -163,12 +163,12 @@ export class CursosController {
             type: 'object',
             required: ['enunciado', 'respuestaEsperada', 'puntajeMaximo'],
             properties: {
-              enunciado: { type: 'string', example: '¿Cuánto es 2 + 2?' },
+              enunciado: { type: 'string', example: 'Â¿CuÃ¡nto es 2 + 2?' },
               respuestaEsperada: { type: 'string', example: '4' },
               puntajeMaximo: { type: 'number', example: 5 },
               criteriosIA: {
                 type: 'string',
-                example: 'Explicación detallada',
+                example: 'ExplicaciÃ³n detallada',
                 nullable: true,
               },
               esEvaluacionVisual: {
@@ -192,6 +192,7 @@ export class CursosController {
     @Body()
     body: {
       titulo: string;
+      fecha?: string;
       puntajeTotal: number;
       preguntas: Array<{
         enunciado: string;
@@ -207,7 +208,7 @@ export class CursosController {
   }
 
   @Post(':id/alumnos/importar-masivo')
-  @ApiOperation({ summary: 'Importar múltiples alumnos masivamente desde CSV/Excel a un curso' })
+  @ApiOperation({ summary: 'Importar mÃºltiples alumnos masivamente desde CSV/Excel a un curso' })
   @ApiParam({ name: 'id', description: 'ID del curso' })
   @ApiBody({
     schema: {
@@ -220,7 +221,7 @@ export class CursosController {
             required: ['nombre', 'apellido', 'legajo'],
             properties: {
               nombre: { type: 'string', example: 'Ana' },
-              apellido: { type: 'string', example: 'García' },
+              apellido: { type: 'string', example: 'GarcÃ­a' },
               legajo: { type: 'string', example: 'L-99999' },
               email: { type: 'string', example: 'ana@example.com' },
             },
@@ -231,7 +232,7 @@ export class CursosController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Reporte de la importación masiva.',
+    description: 'Reporte de la importaciÃ³n masiva.',
   })
   @ApiResponse({ status: 404, description: 'Curso no encontrado.' })
   async importStudentsMassive(

@@ -13,27 +13,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-@ValidatorConstraint({ name: 'isNotPastDate', async: false })
-export class IsNotPastDateConstraint implements ValidatorConstraintInterface {
-  validate(text: string, args: ValidationArguments) {
-    if (!text) return true;
-    let parsedFecha: Date;
-    if (text.includes('/')) {
-      const parts = text.split('/');
-      parsedFecha = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-    } else {
-      parsedFecha = new Date(text);
-    }
-    if (isNaN(parsedFecha.getTime())) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return parsedFecha >= today;
-  }
 
-  defaultMessage(args: ValidationArguments) {
-    return 'No se puede planificar un examen en el pasado';
-  }
-}
 
 export class UpdatePreguntaItemDto {
   @IsOptional()
@@ -72,7 +52,6 @@ export class UpdateExamenDto {
 
   @IsOptional()
   @IsString()
-  @Validate(IsNotPastDateConstraint)
   fecha?: string;
 
   @IsOptional()

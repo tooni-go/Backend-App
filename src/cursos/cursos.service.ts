@@ -107,6 +107,10 @@ export class CreateExamenDto {
   @IsNotEmpty()
   titulo: string;
 
+  @IsOptional()
+  @IsString()
+  fecha?: string;
+
   @IsNumber()
   @IsNotEmpty()
   puntajeTotal: number;
@@ -127,7 +131,7 @@ export class CursosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Resuelve el ID del profesor en la BD de forma multinivel (UUID, googleId, email o creación).
+   * Resuelve el ID del profesor en la BD de forma multinivel (UUID, googleId, email o creaciÃ³n).
    */
   private async resolveTeacherId(profesorId?: string): Promise<string> {
     if (profesorId && this.prisma?.profesor) {
@@ -294,7 +298,7 @@ export class CursosService {
   }
 
   /**
-   * Obtiene un curso por ID con sus exámenes y alumnos, validando pertenencia al profesor autenticado.
+   * Obtiene un curso por ID con sus exÃ¡menes y alumnos, validando pertenencia al profesor autenticado.
    */
   async getCurso(cursoId: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
