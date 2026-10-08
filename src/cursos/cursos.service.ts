@@ -107,6 +107,10 @@ export class CreateExamenDto {
   @IsNotEmpty()
   titulo: string;
 
+  @IsOptional()
+  @IsString()
+  fecha?: string;
+
   @IsNumber()
   @IsNotEmpty()
   puntajeTotal: number;
@@ -127,7 +131,7 @@ export class CursosService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Resuelve el ID del profesor en la BD de forma multinivel (UUID, googleId, email o creación).
+   * Resuelve el ID del profesor en la BD de forma multinivel (UUID, googleId, email o creaciÃ³n).
    */
   private async resolveTeacherId(profesorId?: string): Promise<string> {
     if (profesorId && this.prisma?.profesor) {
@@ -246,10 +250,10 @@ export class CursosService {
     return this.prisma.curso.update({
       where: { id },
       data: {
-        ...(dto.materia && { materia: dto.materia }),
-        ...(dto.anio && { anio: dto.anio }),
-        ...(dto.division && { division: dto.division }),
-        ...(dto.anioLectivo && { anioLectivo: dto.anioLectivo }),
+        ...(dto.materia !== undefined && { materia: dto.materia }),
+        ...(dto.anio !== undefined && { anio: dto.anio }),
+        ...(dto.division !== undefined && { division: dto.division }),
+        ...(dto.anioLectivo !== undefined && { anioLectivo: dto.anioLectivo }),
         ...(dto.preferenciasMembrete !== undefined && {
           preferenciasMembrete: dto.preferenciasMembrete,
         }),
@@ -258,7 +262,7 @@ export class CursosService {
   }
 
   /**
-   * Elimina un curso perteneciente al profesor autenticado.
+   * Elimina un curso perteneciente al profesor autenticado y realiza borrado en cascada.
    */
   async deleteCurso(id: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
@@ -269,15 +273,32 @@ export class CursosService {
           ? { profesorId }
           : { OR: [{ profesorId: activeProfesorId }, { profesorId }] }),
       },
+      include: {
+        examenes: { select: { id: true } }
+      }
     });
     if (!curso) throw new NotFoundException('Curso no encontrado.');
 
-    await this.prisma.curso.delete({ where: { id } });
+    const examenesIds = curso.examenes.map(e => e.id);
+
+    await this.prisma.$transaction(async (tx) => {
+      if (examenesIds.length > 0) {
+        await tx.entrega.deleteMany({
+          where: { examenId: { in: examenesIds } },
+        });
+        await tx.examen.deleteMany({
+          where: { cursoId: id },
+        });
+      }
+
+      await tx.curso.delete({ where: { id } });
+    });
+
     return { success: true };
   }
 
   /**
-   * Obtiene un curso por ID con sus exámenes y alumnos, validando pertenencia al profesor autenticado.
+   * Obtiene un curso por ID con sus exÃ¡menes y alumnos, validando pertenencia al profesor autenticado.
    */
   async getCurso(cursoId: string, profesorId: string) {
     const activeProfesorId = await this.resolveTeacherId(profesorId);
