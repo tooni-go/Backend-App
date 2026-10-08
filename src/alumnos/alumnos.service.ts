@@ -151,9 +151,20 @@ export class AlumnosService {
    * Crea o asocia un alumno a un curso del docente.
    */
   async createAlumno(dto: CreateAlumnoDto, profesorId: string) {
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
     if (dto.cursoId) {
       const curso = await this.prisma.curso.findFirst({
-        where: { id: dto.cursoId, profesorId },
+        where: { id: dto.cursoId, ...teacherFilter },
       });
       if (!curso) {
         throw new NotFoundException('Curso no encontrado.');
@@ -205,12 +216,23 @@ export class AlumnosService {
    * Actualiza un alumno existente validando pertenencia a cursos del docente.
    */
   async updateAlumno(id: string, dto: UpdateAlumnoDto, profesorId: string) {
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
     const alumnoExistente = await this.prisma.alumno.findFirst({
       where: {
         id,
         cursos: {
           some: {
-            curso: { profesorId },
+            curso: teacherFilter,
           },
         },
       },
@@ -250,10 +272,21 @@ export class AlumnosService {
    * elimina el registro físico para no dejar datos huérfanos.
    */
   async deleteAlumno(id: string, profesorId: string) {
+    const activeProfesorId = await this.resolveTeacherId(profesorId);
+    const teacherFilter =
+      activeProfesorId === profesorId
+        ? { profesorId }
+        : {
+            OR: [
+              { profesorId: activeProfesorId },
+              { profesorId },
+            ],
+          };
+
     const enlacesDocente = await this.prisma.alumnoCurso.findMany({
       where: {
         alumnoId: id,
-        curso: { profesorId },
+        curso: teacherFilter,
       },
     });
 
@@ -266,7 +299,7 @@ export class AlumnosService {
       await tx.alumnoCurso.deleteMany({
         where: {
           alumnoId: id,
-          curso: { profesorId },
+          curso: teacherFilter,
         },
       });
 
